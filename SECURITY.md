@@ -10,6 +10,20 @@ a throwaway one rather than sending your own.
 You should get a reply within a week. If a fix is warranted I will credit you
 in the release notes unless you prefer otherwise.
 
+## Vibe coded and opinionated
+
+Vaulty is vibe coded: the code was written with an AI model under my
+direction rather than typed by hand, and it has had no independent security
+audit. What stands behind it is the test suite, the KeePassXC interop checks
+that run in CI, and the choice to take the file format and all cryptography
+from gokeepasslib and the Go standard library instead of writing any here.
+Weigh that before trusting it with your passwords.
+
+It is also opinionated. It saves every change by itself, it is built around
+the keyboard, and it leaves out browser integration, auto-type and sync on
+purpose. A choice you disagree with is worth an issue, but it is not a
+vulnerability.
+
 ## What is in scope
 
 The Security section of the README is the reference for what Vaulty claims to
