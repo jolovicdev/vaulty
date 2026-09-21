@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "vaulty",
+  "outputfilename": "vaulty",
+  "frontend:dir": "frontend",
+  "frontend:install": "npm ci",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "jolovicdev"
+  },
+  "info": {
+    "productName": "Vaulty",
+    "comments": "A local password manager. One encrypted KDBX file, no server, no network."
+  }
+}

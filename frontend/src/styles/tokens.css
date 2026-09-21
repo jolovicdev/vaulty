@@ -1,0 +1,222 @@
+/* Design tokens. Every colour, space, radius and duration in the app comes
+   from here; components never hold a literal value.
+
+   Dark is the default because this app is dark first. The light values are a
+   separate design, not an inversion: its surfaces climb towards white while
+   the dark ones climb away from black, and the accent darkens to hold its
+   contrast on a light page.
+
+   Text tiers clear 4.5:1 on every surface they are used on, control
+   boundaries clear 3:1, and each surface separates from the page by at
+   least 1.1:1. */
+
+:root {
+  color-scheme: dark;
+
+  /* Page and three surfaces above it: panel, row, raised. */
+  --bg: #090b0e;
+  --surface-1: #14181f;
+  --surface-2: #1f242c;
+  --surface-3: #272d36;
+
+  /* Text tiers: primary, secondary, dim. */
+  --text-1: #e8ecf3;
+  --text-2: #b3bcca;
+  --text-3: #8f98a8;
+
+  /* Hairlines: a divider, and the boundary of a control. */
+  --line: #343b45;
+  --line-strong: #6f7885;
+
+  /* One accent, used for the focus ring, the primary action and selection. */
+  --accent: #7aa2f7;
+  --accent-ink: #090b0e;
+  --accent-wash: rgb(122 162 247 / 12%);
+
+  --ok: #6fb98a;
+  --warn: #d3a253;
+  --err: #e6767b;
+
+  /* Password rendering. Letters read as ordinary text, digits take the
+     accent hue and symbols sit one tier down, so 0/O and 1/l differ by
+     colour as well as by shape. */
+  --pw-letter: #e8ecf3;
+  --pw-digit: #8fbcf0;
+  --pw-symbol: #b3bcca;
+
+  /* The scrim behind a floating panel. It cannot be the page colour at an
+     alpha, because in light mode the content panes are that colour already
+     and such a wash leaves them untouched. */
+  --scrim: rgb(4 6 9 / 66%);
+
+  /* Hover and selection are alpha washes, not surfaces. A fixed surface has
+     to separate from whatever is behind it, and no single value does that on
+     the page, inside a dialog and inside a menu at once: light mode has no
+     room above white. A wash composites against its actual parent, so one
+     value works everywhere. */
+  --row-hover: rgb(255 255 255 / 5%);
+  --selected: rgb(122 162 247 / 22%);
+
+  /* A disabled control keeps its shape but stops looking like an action.
+     Fading a filled accent instead leaves the label below 2:1 and the
+     button still reading as live. */
+  --disabled-surface: var(--surface-3);
+  --disabled-text: var(--text-3);
+
+  /* 4px grid. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+
+  /* Compact rows. */
+  --row-h: 34px;
+  --row-h-sm: 28px;
+  --control-h: 32px;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 19px;
+  --text-xl: 26px;
+
+  /* Long text gets a fixed reading width. In rem, not ch, so the notes body
+     and any heading above it line up at the same edge. */
+  --measure: 34rem;
+
+  --duration: 140ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --bg: #e4e7ee;
+    --surface-1: #f2f4f7;
+    --surface-2: #f8fafc;
+    --surface-3: #ffffff;
+
+    --text-1: #12151b;
+    --text-2: #464f5e;
+    --text-3: #5c6575;
+
+    --line: #d0d5de;
+    --line-strong: #767e8c;
+
+    --accent: #2f5fd0;
+    --accent-ink: #ffffff;
+    --accent-wash: rgb(47 95 208 / 10%);
+
+    --ok: #2f6b48;
+    --warn: #7e5c1c;
+    --err: #b23a3f;
+
+    --pw-letter: #12151b;
+    --pw-digit: #26509c;
+    --pw-symbol: #464f5e;
+    --scrim: rgb(24 29 40 / 45%);
+    --row-hover: rgb(18 21 27 / 5%);
+    --selected: rgb(47 95 208 / 18%);
+    --disabled-surface: var(--surface-1);
+    --disabled-text: var(--text-3);
+  }
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #e4e7ee;
+  --surface-1: #f2f4f7;
+  --surface-2: #f8fafc;
+  --surface-3: #ffffff;
+
+  --text-1: #12151b;
+  --text-2: #464f5e;
+  --text-3: #5c6575;
+
+  --line: #d0d5de;
+  --line-strong: #767e8c;
+
+  --accent: #2f5fd0;
+  --accent-ink: #ffffff;
+  --accent-wash: rgb(47 95 208 / 10%);
+
+  --ok: #2f6b48;
+  --warn: #7e5c1c;
+  --err: #b23a3f;
+
+  --pw-letter: #12151b;
+  --pw-digit: #26509c;
+  --pw-symbol: #464f5e;
+
+  --scrim: rgb(24 29 40 / 45%);
+  --row-hover: rgb(18 21 27 / 5%);
+  --selected: rgb(47 95 208 / 18%);
+  --disabled-surface: var(--surface-1);
+  --disabled-text: var(--text-3);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #090b0e;
+  --surface-1: #14181f;
+  --surface-2: #1f242c;
+  --surface-3: #272d36;
+
+  --text-1: #e8ecf3;
+  --text-2: #b3bcca;
+  --text-3: #8f98a8;
+
+  --line: #343b45;
+  --line-strong: #6f7885;
+
+  --accent: #7aa2f7;
+  --accent-ink: #090b0e;
+  --accent-wash: rgb(122 162 247 / 12%);
+
+  --ok: #6fb98a;
+  --warn: #d3a253;
+  --err: #e6767b;
+
+  --pw-letter: #e8ecf3;
+  --pw-digit: #8fbcf0;
+  --pw-symbol: #b3bcca;
+
+  /* The scrim behind a floating panel. It cannot be the page colour at an
+     alpha, because in light mode the content panes are that colour already
+     and such a wash leaves them untouched. */
+  --scrim: rgb(4 6 9 / 66%);
+
+  /* Hover and selection are alpha washes, not surfaces. A fixed surface has
+     to separate from whatever is behind it, and no single value does that on
+     the page, inside a dialog and inside a menu at once: light mode has no
+     room above white. A wash composites against its actual parent, so one
+     value works everywhere. */
+  --row-hover: rgb(255 255 255 / 5%);
+  --selected: rgb(122 162 247 / 22%);
+
+  /* A disabled control keeps its shape but stops looking like an action.
+     Fading a filled accent instead leaves the label below 2:1 and the
+     button still reading as live. */
+  --disabled-surface: var(--surface-3);
+  --disabled-text: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0ms;
+  }
+}

@@ -1,0 +1,24 @@
+# build output
+/build/bin/
+/frontend/dist/
+/frontend/node_modules/
+/node_modules/
+
+# binaries built without -o, which land at the repo root
+/vaulty
+/vaulty.exe
+/frontend/wailsjs/
+
+# The Wails CLI caches the package.json hash here to decide whether to
+# reinstall dependencies.
+/frontend/package.json.md5
+
+# local vaults and their backups must never be committed
+*.kdbx
+*.kdbx.*.bak
+!internal/vault/testdata/*.kdbx
+
+# editor and OS noise
+.DS_Store
+.idea/
+.vscode/

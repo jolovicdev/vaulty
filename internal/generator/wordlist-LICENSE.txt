@@ -1,0 +1,11 @@
+wordlist.txt is the EFF long wordlist, published by the Electronic Frontier
+Foundation at https://www.eff.org/dice
+
+Copyright (c) 2016 Electronic Frontier Foundation
+
+Licensed under the Creative Commons Attribution 3.0 United States licence:
+https://creativecommons.org/licenses/by/3.0/us/
+
+The file reproduces the list verbatim with the leading dice numbers removed,
+one word per line. The word count is unchanged, because the entropy per word
+depends on it.

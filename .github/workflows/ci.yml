@@ -1,0 +1,108 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the WebKitGTK and GTK development packages
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev keepassxc
+      # main.go embeds frontend/dist, which is build output and not in the
+      # repository, so the root package does not compile until it exists.
+      - working-directory: frontend
+        run: npm ci
+      - name: Build the frontend that main.go embeds
+        working-directory: frontend
+        run: npm run build
+      - run: go test . ./internal/...
+      - name: KeePassXC interop
+        run: go test ./internal/vault -run 'KeePassXC|RecycleBinIsKeePassXC' -v
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: . ./internal/...
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run lint
+      - run: cd frontend && npm run typecheck
+      - run: cd frontend && npm run build
+
+  # The Go packages have to be tested on Windows, not only cross-compiled for
+  # it. Flushing a directory after a rename is a POSIX idiom that fails on
+  # Windows, and a cross-compile cannot tell you that; only running the tests
+  # there does.
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Build the frontend that main.go embeds
+        working-directory: frontend
+        run: npm run build
+      - run: go test . ./internal/...
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: . ./internal/...
+
+  windows-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the Wails CLI, which embeds the icon resource
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - name: Cross-compile the portable executable
+        run: wails build -platform windows/amd64 -skipbindings -tags "wv2runtime.error"
+      - name: The WebView2 downloader must not be linked in
+        run: |
+          if strings build/bin/vaulty.exe | grep -q 'go.microsoft.com/fwlink'; then
+            echo "the WebView2 bootstrapper download is linked into the binary"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v5
+        with:
+          name: vaulty-windows-amd64
+          path: build/bin/vaulty.exe
+          # Every run uploads 12 MB. At the default 90 days that fills the
+          # 500 MB a private repository gets within about forty runs, and the
+          # upload then fails the job.
+          retention-days: 3

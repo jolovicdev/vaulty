@@ -1,0 +1,304 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Bundled with the binary. Nothing here reaches the network. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+}
+
+/* The tokens become utilities, so a component writes bg-surface-1 rather
+   than a literal colour. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-scrim: var(--scrim);
+  --color-selected: var(--selected);
+  --color-row-hover: var(--row-hover);
+  --color-disabled-surface: var(--disabled-surface);
+  --color-disabled-text: var(--disabled-text);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-pw-letter: var(--pw-letter);
+  --color-pw-digit: var(--pw-digit);
+  --color-pw-symbol: var(--pw-symbol);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.45;
+    /* Inter's own tabular figures and contextual alternates; without this
+       its default figures wander in a countdown. */
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* Text selection is the one other place the accent appears. */
+  ::selection {
+    background: var(--accent-wash);
+    color: var(--text-1);
+  }
+
+  /* Every focusable thing gets a ring. Nothing in this app sets
+     outline: none without replacing it. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* A text field already has a border, so the offset ring would read as a
+     halo around the widest element on the screen. It gets a crisp accent
+     edge instead: border plus a hairline outline, 2px in total. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    border-color: var(--accent);
+    outline-width: 1px;
+    outline-offset: 0;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-3);
+  }
+
+  /* A scrollbar that belongs to the surface it sits on. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border: 3px solid transparent;
+    border-radius: 6px;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--line-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* Native form controls draw themselves from the OS theme, which is the
+     one thing guaranteed not to match this palette. Each one below is
+     reset and rebuilt from the tokens. accent-color alone is not enough:
+     it tints the mark and leaves the track, box and caret as the browser
+     drew them. */
+
+  .control-checkbox {
+    appearance: none;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    background: var(--surface-1);
+    transition:
+      background-color var(--duration) var(--ease),
+      border-color var(--duration) var(--ease);
+  }
+
+  .control-checkbox:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+    /* The tick is drawn rather than a font glyph, so it is identical on
+       both platforms. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%23090b0e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .control-checkbox:hover:not(:checked) {
+    border-color: var(--text-3);
+  }
+
+  .control-range {
+    appearance: none;
+    width: 100%;
+    height: 16px;
+    background: transparent;
+  }
+
+  .control-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
+  .control-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+  }
+
+  .control-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--accent-wash);
+  }
+
+  .control-select {
+    appearance: none;
+    /* The caret is drawn to match the hairline weight of the lucide icons
+       everywhere else; the native one is a heavy two-stroke arrow. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6.5l4 4 4-4' fill='none' stroke='%238a93a3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    background-size: 14px 14px;
+    padding-right: 26px;
+  }
+
+  :root[data-theme='light'] .control-select,
+  :root:not([data-theme]) .control-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6.5l4 4 4-4' fill='none' stroke='%235c6575' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
+
+@layer utilities {
+  /* Fades the top and bottom edges of a scroll container so a row cut by
+     the boundary reads as "more below" rather than as a broken glyph. The
+     mask is inset from the edges, so a fully scrolled list is not dimmed
+     for no reason. */
+  .scroll-fade {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 14px,
+      black calc(100% - 14px),
+      transparent 100%
+    );
+  }
+
+  /* The reading width for the one long field, notes. */
+  .measure {
+    max-width: var(--measure);
+  }
+
+  /* Digits that do not shift width as a countdown ticks. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Rows animate their background only, and only for as long as the motion
+     token allows. */
+  .row-transition {
+    transition: background-color var(--duration) var(--ease);
+  }
+}
+
+/* The only two animations in the app: a panel arriving, and a copy
+   confirmation's countdown bar draining. Both respect the motion token, so
+   reduced-motion turns them off. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-in {
+  animation: panel-in var(--duration) var(--ease);
+}
+
+@keyframes drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.animate-drain {
+  transform-origin: left;
+  animation: drain linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-drain {
+    animation: none;
+  }
+}

@@ -1,0 +1,56 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        # File paths come from the user choosing a vault, which is the whole
+        # point of the app; G304 flags every one of them.
+        - G304
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - unparam
+      # Every method on App is a binding whose results are consumed by the
+      # frontend, not by Go. unparam cannot see across the bridge and reads
+      # them as unused.
+      - path: app\.go
+        linters:
+          - unparam
+      # Reaching HGLOBAL memory needs a uintptr to unsafe.Pointer
+      # conversion. The block comes from GlobalAlloc, so it is on the Win32
+      # heap and pinned while locked; the collector never sees it. There is
+      # no conversion-free way to do this.
+      - path: internal/clipboard/clipboard_windows\.go
+        linters:
+          - govet
+        text: unsafe.Pointer
+      # G103 says only that unsafe is used, and the same file cannot call
+      # Win32 without it. The file is behind a build tag, so this shows up
+      # when linting for Windows and never on Linux.
+      - path: internal/clipboard/clipboard_windows\.go
+        linters:
+          - gosec
+        text: G103
+
+formatters:
+  enable:
+    - gofmt
