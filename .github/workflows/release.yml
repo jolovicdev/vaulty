@@ -1,0 +1,71 @@
+name: release
+
+# A version tag publishes a release. The commit a tag points at has already
+# been through ci.yml, which runs on every push to main, so this only builds.
+# Started by hand it builds the same way and publishes nothing, which is how
+# to check a release build before tagging it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    # The oldest runner that ships WebKitGTK 4.1. A binary asks for the glibc
+    # it was linked against or newer, so building here keeps the Linux one
+    # running on distributions older than the newest.
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the WebKitGTK and GTK development packages
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      # Wails takes the version in the executable's file properties from
+      # wails.json and has no flag for it. A suffix such as -rc1 is dropped,
+      # because the Windows version resource only holds numbers.
+      - name: Stamp the tag's version into wails.json
+        if: github.ref_type == 'tag'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg v "${version%%-*}" '.info.productVersion = $v' wails.json > wails.json.tmp
+          mv wails.json.tmp wails.json
+      - run: make deps
+      - name: Build the Linux binary
+        run: make build
+      - name: Build the Windows executable
+        run: make tools build-windows
+      - name: The WebView2 downloader must not be linked in
+        run: |
+          if strings build/bin/vaulty.exe | grep -q 'go.microsoft.com/fwlink'; then
+            echo "the WebView2 bootstrapper download is linked into the binary"
+            exit 1
+          fi
+      # The names carry no version, so releases/latest/download/<name> is a
+      # link that keeps working from one release to the next.
+      - name: Name the assets and write their checksums
+        run: |
+          mkdir assets
+          cp build/bin/vaulty assets/vaulty-linux-amd64
+          cp build/bin/vaulty.exe assets/vaulty-windows-amd64.exe
+          cd assets && sha256sum vaulty-* > SHA256SUMS
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" assets/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+      - name: Keep the assets of a run started by hand
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-build
+          path: assets/
+          retention-days: 1

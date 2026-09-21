@@ -79,31 +79,44 @@ Every action is also in the right-click menus and the footer, and
 
 ## Install
 
-There are no packaged releases yet, so for now you build it.
+Download the [latest release](https://github.com/jolovicdev/vaulty/releases/latest).
+Each one is built from its tag by
+[a workflow in this repository](.github/workflows/release.yml), and
+`SHA256SUMS` sits beside the binaries:
 
 ```sh
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+**Windows.** `vaulty-windows-amd64.exe` is portable. There is no installer,
+settings live in `%APPDATA%\vaulty\settings.json`, and nothing else is written
+outside the vault's own folder. It needs the WebView2 runtime, which Windows 11
+already has; if it is missing, Vaulty says so instead of downloading it. The
+executable is not code signed, so SmartScreen asks once: More info, then Run
+anyway.
+
+**Linux.** `vaulty-linux-amd64` needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on
+Debian and Ubuntu) and, for copying, `wl-copy` on Wayland or `xclip`/`xsel` on
+X11.
+
+```sh
+chmod +x vaulty-linux-amd64 && ./vaulty-linux-amd64
+```
+
+### Build from source
+
+```sh
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # Linux only
 make deps      # npm ci in frontend/
 make build     # build/bin/vaulty
 make check     # tests and linters
 ```
 
-Linux needs the GTK and WebKitGTK development packages first:
-
-```sh
-sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
-```
-
-Copying on Linux goes through `wl-copy` on Wayland or `xclip`/`xsel` on X11,
-so have one of them installed. The `webkit2_41` build tag selects WebKitGTK
-4.1; drop it on a distribution that only ships 4.0.
-
-`make build-windows` cross-compiles a portable `build/bin/vaulty.exe` with
-its icon. It uses the Wails CLI, which `make tools` installs, and
-`make build-windows-bare` is the fallback without it. The executable needs the
-WebView2 runtime, which Windows 11 already has; if it is missing, Vaulty says
-so instead of downloading it. Settings live in
-`%APPDATA%\vaulty\settings.json` and nothing else is written outside the
-vault's own folder.
+The `webkit2_41` build tag selects WebKitGTK 4.1; drop it on a distribution
+that only ships 4.0. `make build-windows` cross-compiles the portable
+`build/bin/vaulty.exe` with its icon. It uses the Wails CLI, which
+`make tools` installs, and `make build-windows-bare` is the fallback without
+it.
 
 ## KeePassXC compatibility
 
