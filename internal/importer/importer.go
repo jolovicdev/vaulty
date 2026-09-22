@@ -1,7 +1,7 @@
 // Package importer reads the unencrypted exports of other password managers
-// and turns them into vault drafts. It reads Proton Pass (.zip, .json, .csv)
-// and Bitwarden (.json, .csv), and tells them apart by content rather than by
-// file name.
+// and turns them into vault drafts. It reads Proton Pass (.zip, .json, .csv),
+// Bitwarden (.json, .csv) and 1Password (.1pux, .csv), and tells them apart by
+// content rather than by file name.
 //
 // Nothing here writes to a vault or keeps a value past the call: Read returns
 // the drafts and the caller hands them to vault.Import.
@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrUnknownFormat = errors.New("the file is not a Proton Pass or Bitwarden export")
+	ErrUnknownFormat = errors.New("the file is not a Proton Pass, Bitwarden or 1Password export")
 	ErrEncrypted     = errors.New("the export is encrypted; export again without a password or encryption")
 	ErrTooLarge      = errors.New("the export is larger than an import allows")
 )
@@ -84,10 +84,10 @@ func readLimited(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-// parseZip handles the archive export. A Proton Pass .zip holds
-// "Proton Pass/data.json", or data.pgp when the user chose to encrypt it.
-// Attachments sit beside it under files/, and are counted so the user hears
-// that they stayed behind.
+// parseZip handles the two archive exports. A 1Password .1pux holds
+// export.data; a Proton Pass .zip holds "Proton Pass/data.json", or
+// data.pgp when the user chose to encrypt it. Attachments sit beside them
+// under files/, and are counted so the user hears that they stayed behind.
 func parseZip(data []byte) (Result, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
@@ -99,9 +99,9 @@ func parseZip(data []byte) (Result, error) {
 		name := f.Name
 		switch {
 		case strings.HasSuffix(name, "/"):
-		case strings.HasPrefix(name, "Proton Pass/files/"):
+		case strings.HasPrefix(name, "files/") || strings.HasPrefix(name, "Proton Pass/files/"):
 			files++
-		case name == "data.json" || name == "Proton Pass/data.json":
+		case name == "export.data" || name == "data.json" || name == "Proton Pass/data.json":
 			main = f
 		case name == "Proton Pass/data.pgp":
 			return Result{}, ErrEncrypted
@@ -127,6 +127,7 @@ func parseJSON(data []byte, files int) (Result, error) {
 		Encrypted bool            `json:"encrypted"`
 		Vaults    json.RawMessage `json:"vaults"`
 		Items     json.RawMessage `json:"items"`
+		Accounts  json.RawMessage `json:"accounts"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return Result{}, ErrUnknownFormat
@@ -143,6 +144,8 @@ func parseJSON(data []byte, files int) (Result, error) {
 		res, err = protonJSON(data)
 	case probe.Items != nil:
 		res, err = bitwardenJSON(data)
+	case probe.Accounts != nil:
+		res, err = onePasswordData(data)
 	default:
 		return Result{}, ErrUnknownFormat
 	}
@@ -173,6 +176,8 @@ func parseCSV(data []byte) (Result, error) {
 		return protonCSV(t), nil
 	case t.has("login_uri", "login_username", "login_password"):
 		return bitwardenCSV(t), nil
+	case t.has("title", "username", "password") && (t.has("url") || t.has("website")):
+		return onePasswordCSV(t), nil
 	}
 	return Result{}, ErrUnknownFormat
 }
@@ -298,6 +303,12 @@ func (e *entry) note(s string) {
 	}
 }
 
+func (e *entry) tag(s string) {
+	if s = strings.TrimSpace(s); s != "" {
+		e.d.Tags = append(e.d.Tags, s)
+	}
+}
+
 // totp stores a one-time password setting. The first one becomes the
 // entry's code. The otp field KeePassXC reads must hold an otpauth URI, so
 // a bare base32 secret is wrapped in one. A second code, or a value that is
@@ -361,13 +372,13 @@ func (e *entry) taken(key string) bool {
 // sensitive names, in lower case, the structured values that are secrets:
 // card numbers and codes, identity document and account numbers, key
 // material. They are stored protected, like a password. The keys are Proton
-// Pass and Bitwarden record keys.
+// Pass and Bitwarden record keys and 1Password field ids.
 var sensitive = map[string]bool{
-	"password": true, "pin": true, "code": true,
+	"password": true, "pin": true, "telephonepin": true, "cvv": true, "code": true,
 	"number": true, "verificationnumber": true,
 	"ssn": true, "socialsecuritynumber": true,
 	"passportnumber": true, "licensenumber": true,
-	"accountnumber": true, "iban": true,
+	"accountnumber": true, "accountno": true, "iban": true,
 	"privatekey": true,
 }
 
