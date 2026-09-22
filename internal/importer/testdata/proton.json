@@ -1,0 +1,106 @@
+{
+  "version": "1.21.2",
+  "userId": "fixture-user",
+  "encrypted": false,
+  "vaults": {
+    "share-b": {
+      "name": "Work",
+      "description": "",
+      "display": {"color": 0, "icon": 0},
+      "items": [
+        {
+          "itemId": "i1", "shareId": "share-b", "state": 1, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "GitHub", "note": "work account", "itemUuid": "u1"},
+            "extraFields": [
+              {"fieldName": "Recovery code", "type": "hidden", "data": {"content": "rc-1111"}},
+              {"fieldName": "Team", "type": "text", "data": {"content": "platform"}},
+              {"fieldName": "Backup code", "type": "totp", "data": {"totpUri": "otpauth://totp/backup?secret=GEZDGNBVGY3TQOJQ"}}
+            ],
+            "type": "login",
+            "content": {
+              "itemEmail": "me@example.com",
+              "itemUsername": "octocat",
+              "password": "hunter2-proton",
+              "urls": ["https://github.com/login", "https://github.com/enterprise"],
+              "autofillUrls": [{"url": "https://github.com/login", "mode": 0}, {"url": "https://github.com/enterprise", "mode": 0}],
+              "totpUri": "otpauth://totp/GitHub:octocat?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
+              "passkeys": [{"keyId": "k1"}]
+            }
+          }
+        },
+        {
+          "itemId": "i2", "shareId": "share-b", "state": 2, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "Old login", "note": "", "itemUuid": "u2"},
+            "extraFields": [],
+            "type": "login",
+            "content": {"itemEmail": "", "itemUsername": "gone", "password": "trashed-pass", "urls": [], "totpUri": "", "passkeys": []}
+          }
+        }
+      ]
+    },
+    "share-a": {
+      "name": "Personal",
+      "description": "",
+      "display": {"color": 0, "icon": 0},
+      "items": [
+        {
+          "itemId": "i3", "shareId": "share-a", "state": 1, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": true,
+          "data": {
+            "metadata": {"name": "Bank", "note": "", "itemUuid": "u3"},
+            "extraFields": [],
+            "type": "login",
+            "content": {
+              "itemEmail": "saver@example.com",
+              "password": "correct-horse-proton",
+              "autofillUrls": [{"url": "https://bank.example", "mode": 0}],
+              "totpUri": "JBSWY3DPEHPK3PXP",
+              "passkeys": []
+            }
+          }
+        },
+        {
+          "itemId": "i4", "shareId": "share-a", "state": 1, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "Visa", "note": "daily card", "itemUuid": "u4"},
+            "extraFields": [],
+            "type": "creditCard",
+            "content": {
+              "cardholderName": "Jo Doe", "cardType": 0, "number": "4242424242424242",
+              "verificationNumber": "123", "expirationDate": "2027-04", "pin": "9876"
+            }
+          }
+        },
+        {
+          "itemId": "i5", "shareId": "share-a", "state": 1, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "Me", "note": "", "itemUuid": "u5"},
+            "extraFields": [],
+            "type": "identity",
+            "content": {
+              "fullName": "Jo Doe", "email": "jo@example.com", "socialSecurityNumber": "078-05-1120",
+              "extraPersonalDetails": [{"fieldName": "Nickname", "type": "text", "data": {"content": "JD"}}],
+              "extraSections": [{"sectionName": "Travel", "sectionFields": [{"fieldName": "Frequent flyer", "type": "hidden", "data": {"content": "FF-555"}}]}]
+            }
+          }
+        },
+        {
+          "itemId": "i6", "shareId": "share-a", "state": 1, "aliasEmail": "shop.alias@passmail.net",
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "Shop alias", "note": "", "itemUuid": "u6"},
+            "extraFields": [],
+            "type": "alias",
+            "content": {}
+          }
+        }
+      ]
+    }
+  }
+}
