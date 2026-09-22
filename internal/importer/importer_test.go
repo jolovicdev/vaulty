@@ -145,6 +145,70 @@ func TestBitwardenCSV(t *testing.T) {
 	}
 }
 
+func TestOnePassword1PUX(t *testing.T) {
+	path := zipFixture(t, "export.1pux", map[string]string{
+		"export.attributes": `{"version": 3, "description": "1Password Unencrypted Export"}`,
+		"export.data":       read(t, "onepassword-export.data"),
+		"files/doc.pdf":     "pdf",
+	})
+	res := mustRead(t, path)
+
+	if res.Source != "1Password" || len(res.Entries) != 6 {
+		t.Fatalf("got %s with %d entries, want 1Password with 6", res.Source, len(res.Entries))
+	}
+	wantWarnings(t, res, "1 attached file was not imported")
+
+	ex := find(t, res, "Example")
+	wantFolder(t, ex, "Private")
+	wantDraft(t, ex.Draft, "jo@example.com", "hunter2-1password", "https://example.com")
+	wantSeed(t, ex.Draft, "otpauth://totp/Example:jo?secret=JBSWY3DPEHPK3PXP&issuer=Example")
+	wantField(t, ex.Draft, "KP2A_URL_1", "https://login.example.com", false)
+	wantField(t, ex.Draft, "pin", "pin-4455", true)
+	wantField(t, ex.Draft, "One-time password", "GEZDGNBVGY3TQOJQ", true)
+	wantField(t, ex.Draft, "recovery key", "rk-7777", true)
+	// An untitled field takes its section's title.
+	wantField(t, ex.Draft, "Security", "ask IT", false)
+	wantTags(t, ex.Draft, "work")
+	if ex.Draft.Notes != "main account" {
+		t.Errorf("Notes = %q", ex.Draft.Notes)
+	}
+
+	old := find(t, res, "Old wifi")
+	wantDraft(t, old.Draft, "", "only-a-password", "")
+	wantTags(t, old.Draft, "archived")
+
+	// A server keeps its address and credentials in a section.
+	db := find(t, res, "Database")
+	wantFolder(t, db, "Infra")
+	wantDraft(t, db.Draft, "postgres", "hunter2-server", "ssh://db.internal")
+
+	visa := find(t, res, "Visa")
+	wantField(t, visa.Draft, "number", "4242424242424242", true)
+	wantField(t, visa.Draft, "expiry date", "04/2027", false)
+
+	passport := find(t, res, "Passport")
+	wantField(t, passport.Draft, "number", "X1234567", true)
+	wantField(t, passport.Draft, "date of birth", "1990-01-01", false)
+
+	bank := find(t, res, "Checking")
+	wantField(t, bank.Draft, "account number", "12345678", true)
+	wantField(t, bank.Draft, "telephone PIN", "2468", true)
+	wantField(t, bank.Draft, "bank name", "First Bank", false)
+}
+
+func TestOnePasswordCSV(t *testing.T) {
+	// The fixture starts with a byte order mark, as a Windows export does.
+	res := mustRead(t, filepath.Join("testdata", "onepassword.csv"))
+
+	ex := find(t, res, "Example")
+	wantFolder(t, ex)
+	wantDraft(t, ex.Draft, "jo@example.com", "hunter2-1password", "https://example.com")
+	wantSeed(t, ex.Draft, "otpauth://totp/Example:jo?secret=JBSWY3DPEHPK3PXP&issuer=Example")
+	wantTags(t, ex.Draft, "work", "finance")
+
+	wantTags(t, find(t, res, "Old wifi").Draft, "archived")
+}
+
 func TestEncryptedExportsAreRefused(t *testing.T) {
 	dir := t.TempDir()
 	bitwarden := filepath.Join(dir, "bitwarden.json")
@@ -291,6 +355,13 @@ func wantField(t *testing.T, d vault.Draft, key, value string, protected bool) {
 	}
 	if isProtected != protected {
 		t.Errorf("%s: field %q protected = %v, want %v", d.Title, key, isProtected, protected)
+	}
+}
+
+func wantTags(t *testing.T, d vault.Draft, tags ...string) {
+	t.Helper()
+	if !reflect.DeepEqual(d.Tags, tags) {
+		t.Errorf("%s: Tags = %q, want %q", d.Title, d.Tags, tags)
 	}
 }
 
