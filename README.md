@@ -37,6 +37,7 @@ few letters, and `Enter` copies the password.
   uses
 - Password and passphrase generator backed by `crypto/rand` and the EFF word
   list
+- Imports the unencrypted exports of Proton Pass, Bitwarden and 1Password
 - Custom fields, tags, notes, entry history with restore, and a recycle bin
   KeePassXC recognises as its own
 - Saves every change by itself, atomically, and keeps five rolling backups
@@ -118,6 +119,28 @@ that only ships 4.0. `make build-windows` cross-compiles the portable
 `make tools` installs, and `make build-windows-bare` is the fallback without
 it.
 
+## Importing
+
+Import from Proton Pass, Bitwarden or 1Password is in the command palette and
+the footer's action menu. It reads these unencrypted exports:
+
+| From | Files |
+|---|---|
+| Proton Pass | `.zip`, `.json`, `.csv` |
+| Bitwarden | `.json`, `.csv` |
+| 1Password | `.1pux`, `.csv` |
+
+The dialog says what the file holds before anything is written. The entries
+go into a new group, such as `Imported from Proton Pass`, with a subgroup for
+each vault or folder they had there. Cards, identities, notes and SSH keys
+become entries whose values are custom fields, and card numbers, codes and
+key material are stored protected. Extra URLs are stored as `KP2A_URL_1` and
+up, which KeePassXC reads as further URLs of the same entry. Items in the
+trash, passkeys and attached files are left out, and the dialog counts them.
+An encrypted export is refused; export again without a password. The export
+file holds every password in the clear, so delete it once the import checks
+out.
+
 ## KeePassXC compatibility
 
 The test suite drives the real `keepassxc-cli` to check that KeePassXC reads
@@ -166,7 +189,7 @@ To report a problem, see [SECURITY.md](SECURITY.md).
 
 ## What it doesn't do
 
-Browser integration and autofill, auto-type, attachments, importers, passkeys,
+Browser integration and autofill, auto-type, attachments, passkeys,
 plugins, mobile apps, a sync service, several vaults open at once, or locking
 when the OS session locks. KeePassXC has several of these and opens the same
 file, so the two work side by side.
@@ -180,6 +203,7 @@ internal/vault           KDBX open, list, reveal, edit, save, merge
 internal/clipboard       Per-OS clipboard with a timed clear
 internal/generator       crypto/rand passwords and EFF passphrases
 internal/totp            otpauth URIs and RFC 6238 codes
+internal/importer        Proton Pass, Bitwarden and 1Password exports
 internal/settings        JSON preferences in the OS config dir. No secrets
 internal/strength        Pattern-based guess estimate
 frontend/src/styles      Design tokens, then everything built from them
