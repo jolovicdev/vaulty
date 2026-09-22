@@ -1,0 +1,44 @@
+{
+  "encrypted": false,
+  "folders": [
+    {"id": "f-servers", "name": "Work/Servers"}
+  ],
+  "items": [
+    {
+      "id": "b1", "organizationId": null, "folderId": "f-servers", "type": 1, "reprompt": 0,
+      "name": "Router", "notes": "rack 2", "favorite": false,
+      "fields": [
+        {"name": "API key", "value": "key-2222", "type": 1, "linkedId": null},
+        {"name": "Region", "value": "eu-west", "type": 0, "linkedId": null},
+        {"name": "Enabled", "value": "true", "type": 2, "linkedId": null},
+        {"name": "Linked", "value": null, "type": 3, "linkedId": 100}
+      ],
+      "login": {
+        "uris": [{"match": null, "uri": "https://router.lan"}, {"match": null, "uri": "https://router.backup.lan"}],
+        "username": "admin",
+        "password": "hunter2-bitwarden",
+        "totp": "JBSW Y3DP EHPK 3PXP",
+        "fido2Credentials": [{"credentialId": "c1"}]
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "b2", "organizationId": null, "folderId": null, "type": 3, "reprompt": 0,
+      "name": "Amex", "notes": null, "favorite": false,
+      "card": {"cardholderName": "Jo Doe", "brand": "Amex", "number": "374242424242424", "expMonth": "1", "expYear": "2027", "code": "4321"},
+      "collectionIds": null
+    },
+    {
+      "id": "b3", "organizationId": null, "folderId": null, "type": 5, "reprompt": 0,
+      "name": "Deploy key", "notes": null, "favorite": false,
+      "sshKey": {"privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----\n", "publicKey": "ssh-ed25519 AAAAfixture", "keyFingerprint": "SHA256:fixture"},
+      "collectionIds": null
+    },
+    {
+      "id": "b4", "organizationId": null, "folderId": null, "type": 1, "reprompt": 0,
+      "name": "Deleted", "notes": null, "favorite": false, "deletedDate": "2025-01-02T03:04:05.000Z",
+      "login": {"uris": [], "username": "x", "password": "trashed", "totp": null},
+      "collectionIds": null
+    }
+  ]
+}
