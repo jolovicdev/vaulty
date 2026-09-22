@@ -13,6 +13,7 @@ import (
 
 	"github.com/jolovicdev/vaulty/internal/clipboard"
 	"github.com/jolovicdev/vaulty/internal/generator"
+	"github.com/jolovicdev/vaulty/internal/importer"
 	"github.com/jolovicdev/vaulty/internal/settings"
 	"github.com/jolovicdev/vaulty/internal/strength"
 	"github.com/jolovicdev/vaulty/internal/totp"
@@ -626,6 +627,86 @@ func (a *App) Backups() ([]string, error) {
 		return nil
 	})
 	return out, err
+}
+
+var errEmptyExport = errors.New("the export holds no entries to import")
+
+// ImportPreview says what an export holds before anything is written. It
+// carries a count and names, never an entry: the export is read on this
+// side both times, so no imported secret passes through the webview.
+type ImportPreview struct {
+	Source   string   `json:"source"`
+	Entries  int      `json:"entries"`
+	Group    string   `json:"group"`
+	Warnings []string `json:"warnings"`
+}
+
+// PickImportFile asks for another password manager's export.
+func (a *App) PickImportFile() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Import from another password manager",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Proton Pass, Bitwarden and 1Password exports", Pattern: "*.zip;*.json;*.csv;*.1pux"},
+			{DisplayName: "All files", Pattern: "*"},
+		},
+	})
+}
+
+// PreviewImport reads an export and reports what importing it would add.
+func (a *App) PreviewImport(path string) (ImportPreview, error) {
+	var out ImportPreview
+	err := a.withVault(func(*vault.Vault) error {
+		res, err := readExport(path)
+		if err != nil {
+			return err
+		}
+		out = ImportPreview{
+			Source:   res.Source,
+			Entries:  len(res.Entries),
+			Group:    importGroup(res.Source),
+			Warnings: append([]string{}, res.Warnings...),
+		}
+		return nil
+	})
+	return out, err
+}
+
+// ImportFile adds every entry of an export to a new group, in one write and
+// one save. A save that fails takes the group back out, so the dialog can
+// offer the import again without doubling it. A save refused because the
+// file changed on disk is the conflict case every write shares: the entries
+// stay in memory and the conflict dialog takes over.
+func (a *App) ImportFile(path string) error {
+	return a.withVault(func(v *vault.Vault) error {
+		res, err := readExport(path)
+		if err != nil {
+			return err
+		}
+		dirty := v.Dirty()
+		id, err := v.Import(importGroup(res.Source), res.Entries)
+		if err != nil {
+			return err
+		}
+		if err := a.autosave(); err != nil {
+			return errors.Join(err, v.UndoImport(id, dirty))
+		}
+		return nil
+	})
+}
+
+func readExport(path string) (importer.Result, error) {
+	res, err := importer.Read(path)
+	if err != nil {
+		return res, err
+	}
+	if len(res.Entries) == 0 {
+		return res, errEmptyExport
+	}
+	return res, nil
+}
+
+func importGroup(source string) string {
+	return "Imported from " + source
 }
 
 // Clipboard
