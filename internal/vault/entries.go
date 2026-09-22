@@ -174,7 +174,7 @@ func (v *Vault) Detail(id string) (Detail, error) {
 	}
 	for i := range e.Values {
 		val := &e.Values[i]
-		if isStandardField(val.Key) {
+		if IsStandardField(val.Key) {
 			continue
 		}
 		f := CustomField{Key: val.Key, Protected: val.Value.Protected.Bool}
@@ -187,7 +187,9 @@ func (v *Vault) Detail(id string) (Detail, error) {
 	return d, nil
 }
 
-func isStandardField(key string) bool {
+// IsStandardField reports whether key is one of the fields every entry has,
+// which a custom field cannot be named after.
+func IsStandardField(key string) bool {
 	switch key {
 	case FieldTitle, FieldUserName, FieldPassword, FieldURL, FieldNotes, FieldTOTPSeed:
 		return true
@@ -262,7 +264,7 @@ func applyDraft(e *gokeepasslib.Entry, d Draft) {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if isStandardField(k) || (d.RemoveTOTP && isLegacyTOTPField(k)) {
+		if IsStandardField(k) || (d.RemoveTOTP && isLegacyTOTPField(k)) {
 			continue
 		}
 		e.Values = append(e.Values, protectedValue(k, d.Custom[k], protect[k]))
