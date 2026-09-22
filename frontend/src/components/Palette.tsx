@@ -5,6 +5,7 @@ import {
   ExternalLink,
   FolderOpen,
   FolderPlus,
+  Import,
   KeyRound,
   Lock,
   Plus,
@@ -17,6 +18,7 @@ import {
 import { api } from '../lib/api'
 import { FIELD, type Meta } from '../lib/types'
 import { SHORTCUTS } from '../lib/shortcuts'
+import { IMPORT_LABEL } from '../lib/actions'
 import { Keys } from './primitives'
 
 export type Command =
@@ -29,6 +31,7 @@ export type Command =
   | 'emptyRecycleBin'
   | 'openVault'
   | 'createVault'
+  | 'importFile'
 
 interface CommandRow {
   id: Command
@@ -47,6 +50,7 @@ const COMMANDS: CommandRow[] = [
     icon: <FolderOpen size={14} />,
   },
   { id: 'createVault', label: 'Create a vault', keys: '', icon: <Database size={14} /> },
+  { id: 'importFile', label: IMPORT_LABEL, keys: '', icon: <Import size={14} /> },
   { id: 'generator', label: SHORTCUTS.generator.label, keys: SHORTCUTS.generator.keys, icon: <Wand2 size={14} /> },
   { id: 'save', label: SHORTCUTS.save.label, keys: SHORTCUTS.save.keys, icon: <Check size={14} /> },
   { id: 'settings', label: SHORTCUTS.settings.label, keys: SHORTCUTS.settings.keys, icon: <SettingsIcon size={14} /> },

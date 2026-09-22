@@ -10,6 +10,7 @@ import {
   FolderOpen,
   FolderPlus,
   History as HistoryIcon,
+  Import,
   KeyRound,
   Lock,
   Pencil,
@@ -28,6 +29,8 @@ import { SHORTCUTS } from './shortcuts'
 import { FIELD, type Detail, type GroupNode, type Meta } from './types'
 
 const icon = (c: LucideIcon) => createElement(c, { size: 13 })
+
+export const IMPORT_LABEL = 'Import from Proton Pass, Bitwarden or 1Password'
 
 /** Everything that can be done to one entry. */
 export interface EntryHandlers {
@@ -174,6 +177,7 @@ export interface AppHandlers {
   newGroup: () => void
   openVault: () => void
   createVault: () => void
+  importFile: () => void
   generator: () => void
   save: () => void
   settings: () => void
@@ -202,6 +206,7 @@ export function appMenu(h: AppHandlers, dirty: boolean): MenuEntry[] {
       run: h.openVault,
     },
     { id: 'createVault', label: 'Create a vault', icon: icon(Database), run: h.createVault },
+    { id: 'importFile', label: IMPORT_LABEL, icon: icon(Import), run: h.importFile },
     {
       id: 'generator',
       label: SHORTCUTS.generator.label,

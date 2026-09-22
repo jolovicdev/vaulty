@@ -161,6 +161,13 @@ export interface ConflictResult {
   merge: MergeResult
 }
 
+export interface ImportPreview {
+  source: string
+  entries: number
+  group: string
+  warnings: string[]
+}
+
 /** Field names as KeePass stores them, so a reveal names the right key. */
 export const FIELD = {
   title: 'Title',

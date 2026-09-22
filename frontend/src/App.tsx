@@ -27,6 +27,7 @@ import { NameDialog } from './components/NameDialog'
 import { Dialog, IconButton, Tooltip } from './components/primitives'
 import { Menu, anchorFromButton, type MenuAnchor, type MenuEntry } from './components/Menu'
 import { MoveDialog } from './components/MoveDialog'
+import { ImportDialog } from './components/ImportDialog'
 import { appMenu, entryMenu, groupMenu } from './lib/actions'
 
 type Overlay =
@@ -40,6 +41,7 @@ type Overlay =
   | { kind: 'conflict' }
   | { kind: 'newGroup'; parentId: string }
   | { kind: 'move'; detail: Meta }
+  | { kind: 'import'; path: string }
   | { kind: 'unsaved'; intent: UnsavedIntent }
 
 /** Applies the theme choice. The dark values are the document default, so
@@ -118,6 +120,12 @@ export function App() {
     const chosen = await api.pickNewVaultPath()
     if (chosen) switchVault(chosen, true)
   }, [switchVault])
+
+  const importFile = useCallback(async () => {
+    setMenu(null)
+    const chosen = await api.pickImportFile()
+    if (chosen) setOverlay({ kind: 'import', path: chosen })
+  }, [])
 
   const refreshSettings = useCallback(async () => {
     const s = await api.loadSettings()
@@ -423,6 +431,10 @@ export function App() {
         setOverlay({ kind: 'none' })
         void createVault()
         return
+      case 'importFile':
+        setOverlay({ kind: 'none' })
+        void importFile()
+        return
     }
   }
 
@@ -461,7 +473,10 @@ export function App() {
           }
         />
         {vaultIsEmpty ? (
-          <EmptyVault onNew={() => setOverlay({ kind: 'editor', detail: null })} />
+          <EmptyVault
+            onNew={() => setOverlay({ kind: 'editor', detail: null })}
+            onImport={() => void importFile()}
+          />
         ) : (
           <>
             <EntryList
@@ -567,6 +582,7 @@ export function App() {
                     setOverlay({ kind: 'newGroup', parentId: groups[0]?.id ?? '' }),
                   openVault: () => void browseVault(),
                   createVault: () => void createVault(),
+                  importFile: () => void importFile(),
                   generator: () => setOverlay({ kind: 'generator' }),
                   save: () => void save(),
                   settings: () => setOverlay({ kind: 'settings' }),
@@ -656,6 +672,19 @@ export function App() {
             const id = overlay.detail.id
             setOverlay({ kind: 'none' })
             void api.moveEntry(id, groupId).then(() => refreshAfterWrite(id))
+          }}
+        />
+      )}
+      {overlay.kind === 'import' && (
+        <ImportDialog
+          path={overlay.path}
+          onClose={() => setOverlay({ kind: 'none' })}
+          onImported={() => {
+            // The list shows a group's own entries only, and an import puts
+            // most of them in subgroups, so show everything instead.
+            setSelection(ALL)
+            setQuery('')
+            void refreshAfterWrite()
           }}
         />
       )}
