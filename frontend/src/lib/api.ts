@@ -10,6 +10,7 @@ import type {
   Draft,
   GroupNode,
   HistoryVersion,
+  ImportPreview,
   ListOptions,
   Meta,
   PassphraseOptions,
@@ -102,6 +103,10 @@ export const api = {
   diskState: () => call<DiskState>('DiskState'),
   resolveConflict: (choice: ConflictChoice) => call<ConflictResult>('ResolveConflict', choice),
   backups: () => call<string[]>('Backups'),
+
+  pickImportFile: () => call<string>('PickImportFile'),
+  previewImport: (path: string) => call<ImportPreview>('PreviewImport', path),
+  importFile: (path: string) => call<void>('ImportFile', path),
 
   copyField: (id: string, field: string) => call<CopyResult>('CopyField', id, field),
   copyTotp: (id: string) => call<CopyResult>('CopyTOTP', id),
