@@ -47,3 +47,23 @@ func (v *Vault) Import(name string, entries []Imported) (string, error) {
 	v.dirty = true
 	return groupID(&top), nil
 }
+
+// UndoImport takes the group Import added back out and restores the dirty
+// flag it had before, for when the save that should have followed failed.
+// Without it, trying the import again would add every entry a second time.
+func (v *Vault) UndoImport(id string, dirty bool) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if err := v.checkOpen(); err != nil {
+		return err
+	}
+	root := &v.db.Content.Root.Groups[0]
+	for i := range root.Groups {
+		if groupID(&root.Groups[i]) == id {
+			root.Groups = append(root.Groups[:i], root.Groups[i+1:]...)
+			v.dirty = dirty
+			return nil
+		}
+	}
+	return ErrGroupNotFound
+}
