@@ -4,7 +4,7 @@ import { SHORTCUTS } from '../lib/shortcuts'
 /** Shown instead of the list and detail panes when the vault holds no
  *  entries at all. One empty state, not two, and it explains what to do
  *  rather than reporting that there is nothing. */
-export function EmptyVault({ onNew }: { onNew: () => void }) {
+export function EmptyVault({ onNew, onImport }: { onNew: () => void; onImport: () => void }) {
   const steps = [
     <>
       Add your first entry with <Keys keys={SHORTCUTS.newEntry.keys} />, or{' '}
@@ -16,6 +16,17 @@ export function EmptyVault({ onNew }: { onNew: () => void }) {
         create one now
       </button>
       .
+    </>,
+    <>
+      Coming from another password manager?{' '}
+      <button
+        type="button"
+        onClick={onImport}
+        className="text-accent underline decoration-transparent underline-offset-2 hover:decoration-inherit"
+      >
+        Import
+      </button>{' '}
+      an export from Proton Pass, Bitwarden or 1Password.
     </>,
     <>
       Let the generator pick the password. <Keys keys={SHORTCUTS.generator.keys} /> opens it on its

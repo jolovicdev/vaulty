@@ -1,0 +1,3 @@
+type,name,url,email,username,password,note,totp,createTime,modifyTime,vault
+login,GitHub,"https://github.com/login, https://github.com/enterprise",me@example.com,octocat,hunter2-proton,work account,otpauth://totp/GitHub:octocat?secret=JBSWY3DPEHPK3PXP&issuer=GitHub,1700000000,1700000100,Work
+creditCard,Visa,,,,,"{""cardholderName"":""Jo Doe"",""cardType"":0,""number"":""4242424242424242"",""verificationNumber"":""123"",""expirationDate"":""2027-04"",""pin"":""9876"",""note"":""daily card""}",,1700000000,1700000100,Personal
