@@ -1,6 +1,7 @@
 // Package importer reads the unencrypted exports of other password managers
-// and turns them into vault drafts. It reads Proton Pass (.zip, .json, .csv),
-// and tells the formats apart by content rather than by file name.
+// and turns them into vault drafts. It reads Proton Pass (.zip, .json, .csv)
+// and Bitwarden (.json, .csv), and tells them apart by content rather than by
+// file name.
 //
 // Nothing here writes to a vault or keeps a value past the call: Read returns
 // the drafts and the caller hands them to vault.Import.
@@ -27,7 +28,7 @@ import (
 )
 
 var (
-	ErrUnknownFormat = errors.New("the file is not a Proton Pass export")
+	ErrUnknownFormat = errors.New("the file is not a Proton Pass or Bitwarden export")
 	ErrEncrypted     = errors.New("the export is encrypted; export again without a password or encryption")
 	ErrTooLarge      = errors.New("the export is larger than an import allows")
 )
@@ -100,7 +101,7 @@ func parseZip(data []byte) (Result, error) {
 		case strings.HasSuffix(name, "/"):
 		case strings.HasPrefix(name, "Proton Pass/files/"):
 			files++
-		case name == "Proton Pass/data.json":
+		case name == "data.json" || name == "Proton Pass/data.json":
 			main = f
 		case name == "Proton Pass/data.pgp":
 			return Result{}, ErrEncrypted
@@ -125,6 +126,7 @@ func parseJSON(data []byte, files int) (Result, error) {
 	var probe struct {
 		Encrypted bool            `json:"encrypted"`
 		Vaults    json.RawMessage `json:"vaults"`
+		Items     json.RawMessage `json:"items"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return Result{}, ErrUnknownFormat
@@ -139,6 +141,8 @@ func parseJSON(data []byte, files int) (Result, error) {
 	switch {
 	case probe.Vaults != nil:
 		res, err = protonJSON(data)
+	case probe.Items != nil:
+		res, err = bitwardenJSON(data)
 	default:
 		return Result{}, ErrUnknownFormat
 	}
@@ -164,8 +168,11 @@ func parseCSV(data []byte) (Result, error) {
 		return Result{}, ErrUnknownFormat
 	}
 	t := newTable(rows)
-	if t.has("type", "name", "url", "password", "note", "totp") {
+	switch {
+	case t.has("type", "name", "url", "password", "note", "totp"):
 		return protonCSV(t), nil
+	case t.has("login_uri", "login_username", "login_password"):
+		return bitwardenCSV(t), nil
 	}
 	return Result{}, ErrUnknownFormat
 }
@@ -352,13 +359,15 @@ func (e *entry) taken(key string) bool {
 }
 
 // sensitive names, in lower case, the structured values that are secrets:
-// card numbers and codes, identity document numbers, key material. They are
-// stored protected, like a password. The keys are Proton Pass record keys.
+// card numbers and codes, identity document and account numbers, key
+// material. They are stored protected, like a password. The keys are Proton
+// Pass and Bitwarden record keys.
 var sensitive = map[string]bool{
-	"password": true, "pin": true,
+	"password": true, "pin": true, "code": true,
 	"number": true, "verificationnumber": true,
-	"socialsecuritynumber": true,
-	"passportnumber":       true, "licensenumber": true,
+	"ssn": true, "socialsecuritynumber": true,
+	"passportnumber": true, "licensenumber": true,
+	"accountnumber": true, "iban": true,
 	"privatekey": true,
 }
 
@@ -413,4 +422,11 @@ func label(key string) string {
 		}
 	}
 	return b.String()
+}
+
+func splitPath(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "/")
 }

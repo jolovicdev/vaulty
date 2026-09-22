@@ -87,13 +87,71 @@ func TestProtonPassCSV(t *testing.T) {
 	}
 }
 
+func TestBitwardenJSON(t *testing.T) {
+	res := mustRead(t, filepath.Join("testdata", "bitwarden.json"))
+
+	if res.Source != "Bitwarden" || len(res.Entries) != 3 {
+		t.Fatalf("got %s with %d entries, want Bitwarden with 3", res.Source, len(res.Entries))
+	}
+	wantWarnings(t, res, "1 item in the trash was left out", "1 passkey was not imported")
+
+	router := find(t, res, "Router")
+	wantFolder(t, router, "Work", "Servers")
+	wantDraft(t, router.Draft, "admin", "hunter2-bitwarden", "https://router.lan")
+	wantSeed(t, router.Draft, "otpauth://totp/Router?secret=JBSWY3DPEHPK3PXP")
+	wantField(t, router.Draft, "KP2A_URL_1", "https://router.backup.lan", false)
+	wantField(t, router.Draft, "API key", "key-2222", true)
+	wantField(t, router.Draft, "Region", "eu-west", false)
+	wantField(t, router.Draft, "Enabled", "true", false)
+	if _, ok := router.Draft.Custom["Linked"]; ok {
+		t.Error("a linked field, which has no value, was imported")
+	}
+
+	amex := find(t, res, "Amex")
+	wantFolder(t, amex)
+	wantField(t, amex.Draft, "Number", "374242424242424", true)
+	wantField(t, amex.Draft, "Code", "4321", true)
+	wantField(t, amex.Draft, "Brand", "Amex", false)
+
+	key := find(t, res, "Deploy key")
+	wantField(t, key.Draft, "Private key", "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----\n", true)
+	wantField(t, key.Draft, "Public key", "ssh-ed25519 AAAAfixture", false)
+}
+
+func TestBitwardenOrganisationUsesCollections(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "org.json")
+	write(t, path, `{"encrypted": false,
+		"collections": [{"id": "c1", "organizationId": "o1", "name": "Ops/Shared"}],
+		"items": [{"type": 1, "name": "Shared login", "collectionIds": ["c1"],
+			"login": {"username": "ops", "password": "p", "uris": []}}]}`)
+	wantFolder(t, find(t, mustRead(t, path), "Shared login"), "Ops", "Shared")
+}
+
+func TestBitwardenCSV(t *testing.T) {
+	res := mustRead(t, filepath.Join("testdata", "bitwarden.csv"))
+
+	router := find(t, res, "Router")
+	wantFolder(t, router, "Work", "Servers")
+	wantDraft(t, router.Draft, "admin", "hunter2-bitwarden", "https://router.lan")
+	wantField(t, router.Draft, "KP2A_URL_1", "https://router.backup.lan", false)
+	wantField(t, router.Draft, "Region", "eu-west", false)
+	wantField(t, router.Draft, "Rack", "2", false)
+	wantSeed(t, router.Draft, "otpauth://totp/Router?secret=JBSWY3DPEHPK3PXP")
+
+	wifi := find(t, res, "Wifi")
+	wantFolder(t, wifi)
+	if wifi.Draft.Notes != "the password is on the fridge" {
+		t.Errorf("Notes = %q", wifi.Draft.Notes)
+	}
+}
+
 func TestEncryptedExportsAreRefused(t *testing.T) {
 	dir := t.TempDir()
-	protonJSON := filepath.Join(dir, "proton.json")
-	write(t, protonJSON, `{"version": "1.21.2", "encrypted": true, "vaults": {}}`)
+	bitwarden := filepath.Join(dir, "bitwarden.json")
+	write(t, bitwarden, `{"encrypted": true, "encKeyValidation_DO_NOT_EDIT": "2.x", "items": []}`)
 	proton := zipFixture(t, "proton.zip", map[string]string{"Proton Pass/data.pgp": "-----BEGIN PGP MESSAGE-----"})
 
-	for _, path := range []string{protonJSON, proton} {
+	for _, path := range []string{bitwarden, proton} {
 		if _, err := Read(path); !errors.Is(err, ErrEncrypted) {
 			t.Errorf("%s: err = %v, want ErrEncrypted", filepath.Base(path), err)
 		}
