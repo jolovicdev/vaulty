@@ -277,7 +277,6 @@ func TestWritesAutosave(t *testing.T) {
 			_, err := a.AddGroup("", "Servers")
 			return err
 		}},
-		{"ImportFile", func(t *testing.T) error { return a.ImportFile(writeExport(t)) }},
 		{"DeleteEntry", func(*testing.T) error { return a.DeleteEntry(id) }},
 		{"EmptyRecycleBin", func(*testing.T) error { return a.EmptyRecycleBin() }},
 	}
@@ -352,43 +351,24 @@ func TestAutosaveKeepsTheEditWhenTheFileChanged(t *testing.T) {
 	}
 }
 
-// TestBrowserURLGivesABareAddressAScheme covers entries that store an
-// address the way people type one. Wails refuses a URL with no scheme and
-// only logs the refusal, so without this the Open URL action does nothing.
-// TestFailedImportSaveLeavesNothingBehind covers a save that fails for a
-// reason other than a conflict. The import must come back out of memory, or
-// the retry the dialog offers adds every entry a second time.
-func TestFailedImportSaveLeavesNothingBehind(t *testing.T) {
+// TestImportFileDoesNotSave covers the import dialog's order: ImportFile
+// adds the entries, then the dialog calls Save and shows its error itself.
+// An autosave here would hand a conflict to the conflict dialog, which
+// closes the import dialog before it says what happened.
+func TestImportFileDoesNotSave(t *testing.T) {
 	a := newTestApp(t, 300)
 	openTestVault(t, a)
 	if err := a.Save(); err != nil {
 		t.Fatal(err)
 	}
-	export := writeExport(t)
-
-	// With its directory gone, the vault cannot be written on any platform.
-	dir := filepath.Dir(a.Status().Path)
-	if err := os.RemoveAll(dir); err != nil {
+	if err := a.ImportFile(writeExport(t)); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.ImportFile(export); err == nil {
-		t.Fatal("ImportFile succeeded with nowhere to save")
-	}
-	if a.Status().Dirty {
-		t.Error("the failed import left unsaved changes behind")
-	}
-	if n := importGroups(t, a); n != 0 {
-		t.Fatalf("%d import groups after the failed save, want 0", n)
-	}
-
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := a.ImportFile(export); err != nil {
-		t.Fatal(err)
+	if !a.Status().Dirty {
+		t.Error("ImportFile saved; the dialog saves after it")
 	}
 	if n := importGroups(t, a); n != 1 {
-		t.Errorf("%d import groups after the retry, want 1", n)
+		t.Errorf("%d import groups, want 1", n)
 	}
 }
 
@@ -418,6 +398,9 @@ func importGroups(t *testing.T, a *App) int {
 	return n
 }
 
+// TestBrowserURLGivesABareAddressAScheme covers entries that store an
+// address the way people type one. Wails refuses a URL with no scheme and
+// only logs the refusal, so without this the Open URL action does nothing.
 func TestBrowserURLGivesABareAddressAScheme(t *testing.T) {
 	cases := []struct {
 		raw  string

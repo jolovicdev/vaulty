@@ -17,6 +17,7 @@ export function ImportDialog({
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [busy, setBusy] = useState(false)
+  const [imported, setImported] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,8 +32,9 @@ export function ImportDialog({
     setBusy(true)
     setError('')
     try {
-      await api.importFile(path)
-      onImported()
+      if (!imported) await api.importFile(path)
+      setImported(true)
+      await api.save().finally(onImported)
       setDone(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -46,7 +48,9 @@ export function ImportDialog({
   return (
     <Dialog
       title={preview ? `Import from ${preview.source}` : 'Import'}
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose()
+      }}
       width="w-[500px]"
       footer={
         <div className="flex items-center gap-2">
@@ -59,7 +63,7 @@ export function ImportDialog({
               <Button variant="primary" disabled={!preview || busy} onClick={() => void run()}>
                 {busy ? 'Importing' : `Import ${entries ?? ''}`.trim()}
               </Button>
-              <Button variant="quiet" onClick={onClose}>
+              <Button variant="quiet" disabled={busy} onClick={onClose}>
                 Cancel
               </Button>
             </>
@@ -72,7 +76,7 @@ export function ImportDialog({
 
         {preview && !done && (
           <p className="measure text-base leading-relaxed text-text-2">
-            {entries} go into a new group, {preview.group}. Each vault or folder in the export
+            A new group, {preview.group}, will hold {entries}. Each vault or folder in the export
             becomes a group inside it.
           </p>
         )}
