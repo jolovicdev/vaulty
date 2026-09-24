@@ -671,26 +671,18 @@ func (a *App) PreviewImport(path string) (ImportPreview, error) {
 	return out, err
 }
 
-// ImportFile adds every entry of an export to a new group, in one write and
-// one save. A save that fails takes the group back out, so the dialog can
-// offer the import again without doubling it. A save refused because the
-// file changed on disk is the conflict case every write shares: the entries
-// stay in memory and the conflict dialog takes over.
+// ImportFile adds every entry of an export to a new group, in one write. It
+// does not save: the dialog calls Save next and shows its error itself, so a
+// failed save is retried without adding the entries twice, and a conflict
+// does not close the dialog before it says what happened.
 func (a *App) ImportFile(path string) error {
 	return a.withVault(func(v *vault.Vault) error {
 		res, err := readExport(path)
 		if err != nil {
 			return err
 		}
-		dirty := v.Dirty()
-		id, err := v.Import(importGroup(res.Source), res.Entries)
-		if err != nil {
-			return err
-		}
-		if err := a.autosave(); err != nil {
-			return errors.Join(err, v.UndoImport(id, dirty))
-		}
-		return nil
+		_, err = v.Import(importGroup(res.Source), res.Entries)
+		return err
 	})
 }
 
