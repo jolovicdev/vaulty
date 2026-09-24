@@ -18,7 +18,7 @@ import (
 
 func TestProtonPassZip(t *testing.T) {
 	path := zipFixture(t, "export.zip", map[string]string{
-		"Proton Pass/data.json":           read(t, "proton.json"),
+		"Proton Pass/data.json":           "\ufeff" + read(t, "proton.json"),
 		"Proton Pass/files/share-a/1.png": "png",
 	})
 	res := mustRead(t, path)
@@ -26,8 +26,8 @@ func TestProtonPassZip(t *testing.T) {
 	if res.Source != "Proton Pass" {
 		t.Errorf("Source = %q", res.Source)
 	}
-	if len(res.Entries) != 5 {
-		t.Fatalf("got %d entries, want 5 with the trashed one left out", len(res.Entries))
+	if len(res.Entries) != 6 {
+		t.Fatalf("got %d entries, want 6 with the trashed one left out", len(res.Entries))
 	}
 	wantWarnings(t, res, "1 item in the trash was left out", "1 passkey was not imported", "1 attached file was not imported")
 
@@ -59,6 +59,10 @@ func TestProtonPassZip(t *testing.T) {
 	wantField(t, visa.Draft, "Verification number", "123", true)
 	wantField(t, visa.Draft, "Pin", "9876", true)
 	wantField(t, visa.Draft, "Cardholder name", "Jo Doe", false)
+
+	wifi := find(t, res, "Home wifi")
+	wantDraft(t, wifi.Draft, "", "wpa-secret", "")
+	wantField(t, wifi.Draft, "Security", "1", false)
 
 	me := find(t, res, "Me")
 	wantField(t, me.Draft, "Social security number", "078-05-1120", true)
@@ -136,6 +140,7 @@ func TestBitwardenCSV(t *testing.T) {
 	wantField(t, router.Draft, "KP2A_URL_1", "https://router.backup.lan", false)
 	wantField(t, router.Draft, "Region", "eu-west", false)
 	wantField(t, router.Draft, "Rack", "2", false)
+	wantField(t, router.Draft, "Hint", "ask: IT", false)
 	wantSeed(t, router.Draft, "otpauth://totp/Router?secret=JBSWY3DPEHPK3PXP")
 
 	wifi := find(t, res, "Wifi")

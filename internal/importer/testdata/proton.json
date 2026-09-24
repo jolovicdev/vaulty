@@ -77,6 +77,16 @@
           }
         },
         {
+          "itemId": "i7", "shareId": "share-a", "state": 1, "aliasEmail": null,
+          "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
+          "data": {
+            "metadata": {"name": "Home wifi", "note": "", "itemUuid": "u7"},
+            "extraFields": [],
+            "type": "wifi",
+            "content": {"ssid": "home", "password": "wpa-secret", "security": 1}
+          }
+        },
+        {
           "itemId": "i5", "shareId": "share-a", "state": 1, "aliasEmail": null,
           "contentFormatVersion": 6, "createTime": 1700000000, "modifyTime": 1700000100, "pinned": false,
           "data": {
