@@ -91,10 +91,10 @@ func onePasswordData(data []byte) (Result, error) {
 
 func onePasswordEntry(folder []string, it onePasswordItem) *entry {
 	e := newEntry(folder, it.Overview.Title)
+	e.url(it.Overview.URL)
 	for _, u := range it.Overview.URLs {
 		e.url(u.URL)
 	}
-	e.url(it.Overview.URL)
 	for _, t := range it.Overview.Tags {
 		e.tag(t)
 	}

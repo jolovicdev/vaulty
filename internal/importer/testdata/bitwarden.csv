@@ -1,4 +1,5 @@
 folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
 Work/Servers,,login,Router,rack 2,"Region: eu-west
-Rack: 2",0,"https://router.lan,https://router.backup.lan",admin,hunter2-bitwarden,JBSWY3DPEHPK3PXP
+Rack: 2
+Hint: ask: IT",0,"https://router.lan,https://router.backup.lan",admin,hunter2-bitwarden,JBSWY3DPEHPK3PXP
 ,,note,Wifi,the password is on the fridge,,0,,,,

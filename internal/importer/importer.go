@@ -119,7 +119,7 @@ func parseZip(data []byte) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return parseJSON(body, files)
+	return parseJSON(bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")), files)
 }
 
 func parseJSON(data []byte, files int) (Result, error) {
@@ -304,7 +304,7 @@ func (e *entry) note(s string) {
 }
 
 func (e *entry) tag(s string) {
-	if s = strings.TrimSpace(s); s != "" {
+	if s = strings.TrimSpace(s); s != "" && !slices.Contains(e.d.Tags, s) {
 		e.d.Tags = append(e.d.Tags, s)
 	}
 }
@@ -382,8 +382,9 @@ var sensitive = map[string]bool{
 	"privatekey": true,
 }
 
-// fields adds every string in a structured record, such as a card or an
-// identity, as a custom field named after its key. Nested lists of named
+// fields adds every value in a structured record, such as a card or an
+// identity, as a custom field named after its key. A password or username
+// fills the standard field while that is empty. Nested lists of named
 // fields are handed to extra.
 func (e *entry) fields(content map[string]any, extra func(key string, v any)) {
 	keys := make([]string, 0, len(content))
@@ -393,11 +394,18 @@ func (e *entry) fields(content map[string]any, extra func(key string, v any)) {
 	sort.Strings(keys)
 	for _, k := range keys {
 		switch v := content[k].(type) {
-		case string:
-			e.field(label(k), v, sensitive[strings.ToLower(k)])
 		case []any, map[string]any:
 			if extra != nil {
 				extra(k, v)
+			}
+		default:
+			switch s := str(v); {
+			case k == "password" && e.d.Password == "":
+				e.password(s)
+			case k == "username" && e.d.Username == "":
+				e.username(s)
+			default:
+				e.field(label(k), s, sensitive[strings.ToLower(k)])
 			}
 		}
 	}
@@ -433,11 +441,4 @@ func label(key string) string {
 		}
 	}
 	return b.String()
-}
-
-func splitPath(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, "/")
 }

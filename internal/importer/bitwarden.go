@@ -76,7 +76,7 @@ func bitwardenJSON(data []byte) (Result, error) {
 		if group == "" && len(it.CollectionIDs) > 0 {
 			group = it.CollectionIDs[0]
 		}
-		e := newEntry(splitPath(names[group]), it.Name)
+		e := newEntry(strings.Split(names[group], "/"), it.Name)
 		if l := it.Login; l != nil {
 			e.username(l.Username)
 			e.password(l.Password)
@@ -109,7 +109,7 @@ func bitwardenCSV(t table) Result {
 		if folder == "" {
 			folder, _, _ = strings.Cut(t.get(row, "collections"), ",")
 		}
-		e := newEntry(splitPath(folder), t.get(row, "name"))
+		e := newEntry(strings.Split(folder, "/"), t.get(row, "name"))
 		e.username(t.get(row, "login_username"))
 		e.password(t.get(row, "login_password"))
 		for _, u := range strings.Split(t.get(row, "login_uri"), ",") {
@@ -118,8 +118,8 @@ func bitwardenCSV(t table) Result {
 		e.totp(t.get(row, "login_totp"))
 		for _, line := range strings.Split(t.get(row, "fields"), "\n") {
 			line = strings.TrimSuffix(line, "\r")
-			if i := strings.LastIndex(line, ": "); i >= 0 {
-				e.field(line[:i], line[i+2:], false)
+			if name, value, ok := strings.Cut(line, ": "); ok {
+				e.field(name, value, false)
 			}
 		}
 		e.note(t.get(row, "notes"))
