@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 //go:embed wordlist.txt
@@ -202,26 +203,30 @@ func Passphrase(o PassphraseOptions) (string, error) {
 	return phrase, nil
 }
 
-var words []string
+var (
+	wordsOnce sync.Once
+	words     []string
+	wordsErr  error
+)
 
 // Words returns the embedded EFF long wordlist.
 func Words() ([]string, error) {
-	if words != nil {
-		return words, nil
-	}
-	data, err := wordlistFS.ReadFile("wordlist.txt")
-	if err != nil {
-		return nil, err
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	out := make([]string, 0, len(lines))
-	for _, l := range lines {
-		if l = strings.TrimSpace(l); l != "" {
-			out = append(out, l)
+	wordsOnce.Do(func() {
+		data, err := wordlistFS.ReadFile("wordlist.txt")
+		if err != nil {
+			wordsErr = err
+			return
 		}
-	}
-	words = out
-	return words, nil
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		out := make([]string, 0, len(lines))
+		for _, l := range lines {
+			if l = strings.TrimSpace(l); l != "" {
+				out = append(out, l)
+			}
+		}
+		words = out
+	})
+	return words, wordsErr
 }
 
 func pickRune(alphabet string) (rune, error) {

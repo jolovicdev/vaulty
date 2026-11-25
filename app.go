@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	neturl "net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -197,11 +199,13 @@ func (a *App) LoadSettings() settings.Settings {
 }
 
 // SaveSettings persists the preferences and re-arms the idle timer with the
-// new timeout.
+// new timeout. The recent-vault list is owned by Unlock, CreateVault and
+// ForgetRecent, so saving preferences never overwrites it with a stale copy.
 func (a *App) SaveSettings(s settings.Settings) error {
 	if a.store == nil {
 		return errors.New("settings directory is unavailable on this system")
 	}
+	s.Recent = a.store.Load().Recent
 	if err := a.store.Save(s); err != nil {
 		return err
 	}
@@ -319,7 +323,13 @@ func (a *App) ForgetRecent(path string) error {
 	}
 	s := a.store.Load()
 	s.Forget(path)
-	return a.store.Save(s)
+	if err := a.store.Save(s); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.cached = s
+	a.mu.Unlock()
+	return nil
 }
 
 // Lock ends the session: the database object and its key material go, the
@@ -328,6 +338,23 @@ func (a *App) ForgetRecent(path string) error {
 // is why nothing here claims to have erased it.
 func (a *App) Lock() {
 	a.mu.Lock()
+	a.endSession()
+}
+
+// lockIf locks only while v is still the open vault. Stopping a timer does
+// not recall a callback that already started, so an idle lock armed for one
+// session can run after another has opened.
+func (a *App) lockIf(v *vault.Vault) {
+	a.mu.Lock()
+	if a.v != v {
+		a.mu.Unlock()
+		return
+	}
+	a.endSession()
+}
+
+// endSession is Lock's body. The caller holds a.mu; endSession releases it.
+func (a *App) endSession() {
 	v := a.v
 	a.v = nil
 	if a.idle != nil {
@@ -358,7 +385,8 @@ func (a *App) Touch() {
 	if a.idle != nil {
 		a.idle.Stop()
 	}
-	a.idle = time.AfterFunc(d, a.Lock)
+	v := a.v
+	a.idle = time.AfterFunc(d, func() { a.lockIf(v) })
 }
 
 // Reading entries
@@ -794,12 +822,13 @@ func (a *App) ClearClipboard() {
 
 // TOTPCode is a code and the life left in it, for the countdown ring.
 type TOTPCode struct {
-	Code      string `json:"code"`
-	Digits    int    `json:"digits"`
-	Period    int    `json:"period"`
-	Remaining int    `json:"remaining"`
-	Issuer    string `json:"issuer"`
-	Account   string `json:"account"`
+	Code        string `json:"code"`
+	Digits      int    `json:"digits"`
+	Period      int    `json:"period"`
+	Remaining   int    `json:"remaining"`
+	RemainingMs int64  `json:"remainingMs"`
+	Issuer      string `json:"issuer"`
+	Account     string `json:"account"`
 }
 
 // TOTP returns the current code for an entry.
@@ -819,13 +848,15 @@ func (a *App) TOTP(id string) (TOTPCode, error) {
 		if err != nil {
 			return err
 		}
+		rem := cfg.Remaining(now)
 		out = TOTPCode{
-			Code:      code,
-			Digits:    cfg.Digits,
-			Period:    cfg.Period,
-			Remaining: int(cfg.Remaining(now).Seconds()),
-			Issuer:    cfg.Issuer,
-			Account:   cfg.Account,
+			Code:        code,
+			Digits:      cfg.Digits,
+			Period:      cfg.Period,
+			Remaining:   int(math.Ceil(rem.Seconds())),
+			RemainingMs: rem.Milliseconds(),
+			Issuer:      cfg.Issuer,
+			Account:     cfg.Account,
 		}
 		return nil
 	})
@@ -956,7 +987,11 @@ func (a *App) OpenURL(id string) error {
 		if url == "" {
 			return errors.New("entry has no URL")
 		}
-		runtime.BrowserOpenURL(a.ctx, browserURL(url))
+		target, err := browserURL(url)
+		if err != nil {
+			return err
+		}
+		runtime.BrowserOpenURL(a.ctx, target)
 		return nil
 	})
 }
@@ -965,10 +1000,56 @@ func (a *App) OpenURL(id string) error {
 // the https one, which is the rule KeePassXC applies. Wails refuses a URL
 // that has no scheme and only logs the refusal, so the action would
 // otherwise do nothing at all.
-func browserURL(raw string) string {
+//
+// Only http and https are passed on. The system opener runs whatever handler
+// a scheme maps to, and a file URL in a shared vault can name a program.
+func browserURL(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
-	if strings.Contains(raw, "://") {
-		return raw
+	if raw == "" {
+		return "", errors.New("entry has no URL")
 	}
-	return "https://" + raw
+
+	// Only treat "://" as a scheme separator when it precedes any path,
+	// query or fragment, so a bare URL like
+	// "login.example.com/auth?next=https://app.example.com" still gets https.
+	sep := strings.IndexAny(raw, "/?#")
+	if idx := strings.Index(raw, "://"); idx >= 0 && (sep < 0 || idx < sep) {
+		u, err := neturl.Parse(raw)
+		if err != nil {
+			return "", err
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return "", fmt.Errorf("only http and https addresses open, not %s", u.Scheme)
+		}
+		if u.Host == "" {
+			return "", errors.New("URL has no host")
+		}
+		return raw, nil
+	}
+
+	head := raw
+	if sep >= 0 {
+		head = raw[:sep]
+	}
+	// Reject scheme-only URIs such as "javascript:alert(1)" or "file:/etc/passwd",
+	// while still allowing bare "host:port" addresses like "nas.local:5001".
+	if colon := strings.IndexByte(head, ':'); colon > 0 {
+		scheme, rest := head[:colon], head[colon+1:]
+		if !isPort(rest) && !strings.ContainsRune(scheme, '.') {
+			return "", fmt.Errorf("only http and https addresses open, not %s", strings.ToLower(scheme))
+		}
+	}
+	return "https://" + raw, nil
+}
+
+func isPort(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

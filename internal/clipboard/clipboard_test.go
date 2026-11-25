@@ -1,6 +1,7 @@
 package clipboard
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -121,6 +122,104 @@ func TestCopyWithoutTimeoutSchedulesNothing(t *testing.T) {
 	}
 	if !m.Expires().IsZero() {
 		t.Error("Expires is set for a copy with no timeout")
+	}
+	m.ClearNow()
+}
+
+// TestStaleTimerDoesNotTouchNewerCopy covers a clear timer whose callback
+// already fired as a newer copy arrived: it must neither wipe the newer
+// value nor forget it so its own timer fails to clear it.
+func TestStaleTimerDoesNotTouchNewerCopy(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		contents string
+	)
+	readStarted := make(chan struct{}, 1)
+	releaseRead := make(chan struct{})
+
+	m := &Manager{
+		readFn: func() (string, error) {
+			mu.Lock()
+			v := contents
+			mu.Unlock()
+			select {
+			case readStarted <- struct{}{}:
+				<-releaseRead
+			default:
+			}
+			return v, nil
+		},
+		writeFn: func(s string) error {
+			mu.Lock()
+			contents = s
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	if err := m.Copy("secret-A", 20*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	<-readStarted
+
+	copyDone := make(chan error, 1)
+	go func() {
+		copyDone <- m.Copy("secret-B", 80*time.Millisecond)
+	}()
+	// Give Copy("secret-B") a moment to queue behind the in-flight clear.
+	time.Sleep(15 * time.Millisecond)
+	close(releaseRead)
+
+	if err := <-copyDone; err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	got := contents
+	mu.Unlock()
+	if got != "secret-B" {
+		t.Fatalf("clipboard = %q right after Copy(B), want secret-B", got)
+	}
+	if m.Expires().IsZero() {
+		t.Fatal("Expires was cleared by the stale timer")
+	}
+
+	// Secret B's own timer must still fire and wipe it.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		v := contents
+		mu.Unlock()
+		if v == "" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("secret-B was never cleared after its own timeout")
+}
+
+// TestStaleGenerationIgnoredAfterNewerCopy covers a clear callback that
+// fired just before Copy(B) ran and then acquired ioMu afterwards.
+func TestStaleGenerationIgnoredAfterNewerCopy(t *testing.T) {
+	var contents string
+	m := &Manager{
+		readFn:  func() (string, error) { return contents, nil },
+		writeFn: func(s string) error { contents = s; return nil },
+	}
+	if err := m.Copy("secret-A", 0); err != nil {
+		t.Fatal(err)
+	}
+	oldGen := m.gen
+	if err := m.Copy("secret-B", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	m.clearIfOurs(oldGen)
+	if contents != "secret-B" {
+		t.Fatalf("stale clear wiped clipboard to %q", contents)
+	}
+	if m.Expires().IsZero() {
+		t.Fatal("stale clear wiped Expires for the newer copy")
 	}
 	m.ClearNow()
 }

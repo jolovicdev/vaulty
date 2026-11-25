@@ -199,3 +199,31 @@ func TestRemaining(t *testing.T) {
 		}
 	}
 }
+
+// TestTenDigitCode covers the widest code otpauth allows. 10^10 does not fit
+// in 32 bits, and RFC 4226's count 3 truncates to 1726969429, above where a
+// 32-bit modulus would wrap.
+func TestTenDigitCode(t *testing.T) {
+	cfg, err := Parse(rfcSeed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Digits = 10
+	got, err := cfg.Code(time.Unix(90, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "1726969429" {
+		t.Errorf("Code = %s, want 1726969429", got)
+	}
+}
+
+func TestRemainingClampsPreEpochAndKeepsSubsecondPrecision(t *testing.T) {
+	cfg := Config{Period: 30}
+	if got := cfg.Remaining(time.Unix(-5, 0)); got != 30*time.Second {
+		t.Errorf("Remaining(-5s) = %v, want 30s", got)
+	}
+	if got := cfg.Remaining(time.Unix(29, 950_000_000)); got != 50*time.Millisecond {
+		t.Errorf("Remaining(29.95s) = %v, want 50ms", got)
+	}
+}

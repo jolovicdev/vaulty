@@ -217,11 +217,12 @@ func (c Config) Code(at time.Time) (string, error) {
 	offset := sum[len(sum)-1] & 0x0f
 	value := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
 
-	mod := uint32(1)
+	// 64 bits because otpauth allows 10 digits and 10^10 overflows 32.
+	mod := uint64(1)
 	for i := 0; i < digits; i++ {
 		mod *= 10
 	}
-	return fmt.Sprintf("%0*d", digits, value%mod), nil
+	return fmt.Sprintf("%0*d", digits, uint64(value)%mod), nil
 }
 
 // Remaining is how long the code for at stays valid.
@@ -230,6 +231,10 @@ func (c Config) Remaining(at time.Time) time.Duration {
 	if period <= 0 {
 		period = DefaultPeriod
 	}
-	elapsed := at.Unix() % int64(period)
-	return time.Duration(int64(period)-elapsed) * time.Second
+	unix := at.Unix()
+	if unix < 0 {
+		return time.Duration(period) * time.Second
+	}
+	nextStep := (unix/int64(period) + 1) * int64(period)
+	return time.Unix(nextStep, 0).Sub(at)
 }

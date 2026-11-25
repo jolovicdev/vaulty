@@ -1,6 +1,9 @@
 package strength
 
 import (
+	"encoding/json"
+	"math"
+	"strings"
 	"testing"
 )
 
@@ -283,5 +286,42 @@ func TestChosenPasswordsAreStillGraded(t *testing.T) {
 				t.Errorf("Warning = %q, want a warning: %v", got.Warning, c.wantWarning)
 			}
 		})
+	}
+}
+
+// TestVeryLongValueStaysFinite covers a pasted value far past any real
+// password. Its brute force count overflows a float64, and the result has to
+// survive JSON on its way to the frontend.
+func TestVeryLongValueStaysFinite(t *testing.T) {
+	for _, pw := range []string{
+		strings.Repeat("aB3!", 100),
+		"ghp_" + strings.Repeat("aB3x", 100),
+	} {
+		r := Estimate(pw, testDict())
+		if math.IsInf(r.Entropy, 0) || math.IsInf(r.Guesses, 0) {
+			t.Errorf("Estimate(%.8q...) = %+v", pw, r)
+		}
+		if _, err := json.Marshal(r); err != nil {
+			t.Errorf("json.Marshal: %v", err)
+		}
+	}
+}
+
+func TestTokenIssuerRejectsNonTokensAndSetsGuesses(t *testing.T) {
+	dict := testDict()
+	for _, pw := range []string{
+		"sk-🎉🎉🎉🎉",
+		"ghp_aaaaaaaaaaaa",
+		"ghp_123456 7890abcd",
+	} {
+		r := Estimate(pw, dict)
+		if r.Issuer != "" {
+			t.Errorf("Estimate(%q).Issuer = %q, want empty", pw, r.Issuer)
+		}
+	}
+
+	real := Estimate("ghp_1l0OI5S2zB8xQwRtYuIoPaSdFgHj", dict)
+	if real.Guesses <= 0 {
+		t.Errorf("Guesses = %v for recognised token, want > 0", real.Guesses)
 	}
 }

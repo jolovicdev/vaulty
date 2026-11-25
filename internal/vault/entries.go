@@ -264,7 +264,7 @@ func applyDraft(e *gokeepasslib.Entry, d Draft) {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if IsStandardField(k) || (d.RemoveTOTP && isLegacyTOTPField(k)) {
+		if IsStandardField(k) || ((d.RemoveTOTP || d.TOTPSeed != "") && isLegacyTOTPField(k)) {
 			continue
 		}
 		e.Values = append(e.Values, protectedValue(k, d.Custom[k], protect[k]))
@@ -312,10 +312,18 @@ func (v *Vault) Add(d Draft) (string, error) {
 // moves the entry.
 func (v *Vault) Update(id string, d Draft) error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
 	e, owner, _, _, err := v.findEntry(id)
 	if err != nil {
-		v.mu.Unlock()
 		return err
+	}
+	// The target is resolved before anything changes, so a draft naming a
+	// missing group fails without touching the entry.
+	var dst *gokeepasslib.Group
+	if d.GroupID != "" && d.GroupID != groupID(owner) {
+		if dst, err = v.findGroup(d.GroupID); err != nil {
+			return err
+		}
 	}
 
 	// The editor never loads the stored seed, so an empty one means
@@ -333,16 +341,10 @@ func (v *Vault) Update(id string, d Draft) error {
 	touch(e)
 	v.dirty = true
 
-	moveTo := ""
-	if d.GroupID != "" && d.GroupID != groupID(owner) {
-		moveTo = d.GroupID
-	}
-	v.mu.Unlock()
-
-	if moveTo == "" {
+	if dst == nil {
 		return nil
 	}
-	return v.Move(id, moveTo)
+	return v.move(e, owner, dst)
 }
 
 // trimHistory honours the database's HistoryMaxItems setting, which is what
@@ -380,12 +382,17 @@ func (v *Vault) Move(id, groupTarget string) error {
 	if err != nil {
 		return err
 	}
+	return v.move(e, owner, dst)
+}
+
+// move relocates e from owner into dst. The caller holds the write lock.
+func (v *Vault) move(e *gokeepasslib.Entry, owner, dst *gokeepasslib.Group) error {
 	if owner == dst {
 		return nil
 	}
 
 	moved := *e
-	if err := removeEntry(owner, id); err != nil {
+	if err := removeEntry(owner, entryID(e)); err != nil {
 		return err
 	}
 	loc := w.Now()

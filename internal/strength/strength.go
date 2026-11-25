@@ -63,18 +63,30 @@ func NewDictionary(words []string) Dictionary {
 
 const minDictWord = 4
 
+// maxRunes bounds what Estimate reads. The largest alphabet is 195, and
+// 195^128 is about 10^293, so every guess count stays inside a float64,
+// which JSON cannot carry as infinity. It also bounds the per-keystroke
+// cost, which grows with the cube of the length.
+const maxRunes = 128
+
 // Estimate scores password against dict. A nil dict disables word matching.
+// Only the first maxRunes runes are read.
 func Estimate(password string, dict Dictionary) Result {
 	if password == "" {
 		return Result{Label: label(0), Warning: "empty"}
+	}
+	if r := []rune(password); len(r) > maxRunes {
+		password = string(r[:maxRunes])
 	}
 
 	if issuer, ok := tokenIssuer(password); ok {
 		// A recognised key format is machine issued by definition. Report
 		// its size and who issued it; a band would be noise.
+		guesses := bruteForceGuesses(password, classSize(password))
 		return Result{
 			Score:   4,
-			Entropy: round(math.Log2(bruteForceGuesses(password, classSize(password)))),
+			Entropy: round(math.Log2(guesses)),
+			Guesses: guesses,
 			Label:   "machine issued",
 			Machine: true,
 			Issuer:  issuer,
@@ -221,10 +233,17 @@ var tokenPrefixes = []struct {
 const minTokenLength = 16
 
 // tokenIssuer matches the value against the known key formats, longest
-// prefix first so sk-ant- beats sk-.
+// prefix first so sk-ant- beats sk-. Real issued tokens are printable ASCII
+// without spaces and carry non-trivial variation after the prefix.
 func tokenIssuer(s string) (string, bool) {
-	if len(s) < minTokenLength {
+	runes := []rune(s)
+	if len(runes) < minTokenLength {
 		return "", false
+	}
+	for _, r := range runes {
+		if r <= 0x20 || r >= 0x7f {
+			return "", false
+		}
 	}
 	best, bestLen := "", 0
 	for _, t := range tokenPrefixes {
@@ -232,7 +251,18 @@ func tokenIssuer(s string) (string, bool) {
 			best, bestLen = t.issuer, len(t.prefix)
 		}
 	}
-	return best, best != ""
+	if best == "" {
+		return "", false
+	}
+	suffix := s[bestLen:]
+	seen := map[byte]struct{}{}
+	for i := 0; i < len(suffix); i++ {
+		seen[suffix[i]] = struct{}{}
+	}
+	if len(seen) < 6 {
+		return "", false
+	}
+	return best, true
 }
 
 // pieceGuesses returns the guess count for one substring and the name of the

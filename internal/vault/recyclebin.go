@@ -98,25 +98,28 @@ func (v *Vault) Delete(id string) error {
 // Restore moves an entry out of the recycle bin into the given group, or into
 // the first root group when none is named.
 func (v *Vault) Restore(id, groupTarget string) error {
-	v.mu.RLock()
-	_, _, _, inBin, err := v.findEntry(id)
-	v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	e, owner, _, inBin, err := v.findEntry(id)
 	if err != nil {
 		return err
 	}
 	if !inBin {
 		return nil
 	}
+	var dst *gokeepasslib.Group
 	if groupTarget == "" {
-		v.mu.RLock()
 		if len(v.db.Content.Root.Groups) == 0 {
-			v.mu.RUnlock()
 			return ErrGroupNotFound
 		}
-		groupTarget = groupID(&v.db.Content.Root.Groups[0])
-		v.mu.RUnlock()
+		dst = &v.db.Content.Root.Groups[0]
+	} else {
+		dst, err = v.findGroup(groupTarget)
+		if err != nil {
+			return err
+		}
 	}
-	return v.Move(id, groupTarget)
+	return v.move(e, owner, dst)
 }
 
 // EmptyRecycleBin permanently removes every entry in the bin.

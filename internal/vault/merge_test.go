@@ -415,3 +415,132 @@ func TestMergeFromDiskUnblocksSave(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeRespectsLocalTombstones(t *testing.T) {
+	ours, theirs := twoCopies(t)
+	bankID := idOf(t, ours, "Bank")
+
+	if err := ours.Delete(bankID); err != nil {
+		t.Fatal(err)
+	}
+	if err := ours.Delete(bankID); err != nil {
+		t.Fatal(err)
+	}
+	ours.db.Content.Root.DeletedObjects[0].DeletionTime.Time = time.Now().Add(time.Hour)
+
+	if _, err := theirs.Add(Draft{Title: "Other Side", Password: "p"}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := ours.Merge(theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Added != 1 {
+		t.Errorf("Added = %d, want 1", res.Added)
+	}
+	if _, err := ours.Detail(bankID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("locally deleted Bank came back: %v", err)
+	}
+}
+
+func TestMergeKeepsRecycledEntriesInRecycleBin(t *testing.T) {
+	dir := t.TempDir()
+	creds := Credentials{Password: "master"}
+	ours, err := Create(filepath.Join(dir, "a.kdbx"), creds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ours.Close()
+	theirs, err := Create(filepath.Join(dir, "b.kdbx"), creds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer theirs.Close()
+
+	tid, err := theirs.Add(Draft{Title: "Trashed", Password: "p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Delete(tid); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ours.Merge(theirs); err != nil {
+		t.Fatal(err)
+	}
+	active, err := ours.List(ListOptions{IncludeRecycleBin: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range active {
+		if m.Title == "Trashed" {
+			t.Errorf("recycled entry merged as active: %+v", m)
+		}
+	}
+	d, err := ours.Detail(tid)
+	if err != nil {
+		t.Fatalf("merged recycled entry missing: %v", err)
+	}
+	if !d.InRecycleBin {
+		t.Error("InRecycleBin = false, want true")
+	}
+}
+
+func TestMergePreservesSlashInGroupNames(t *testing.T) {
+	ours, theirs := twoCopies(t)
+	gid, err := theirs.AddGroup(rootID(t, theirs), "CI/CD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := theirs.Add(Draft{Title: "Deploy", Password: "p", GroupID: gid}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ours.Merge(theirs); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := ours.Groups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, child := range groups[0].Children {
+		if child.Name == "CI/CD" && child.Count == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("group CI/CD was not preserved: %+v", groups[0].Children)
+	}
+}
+
+func TestMergeRelocatesMovedEntryWhenNewer(t *testing.T) {
+	ours, theirs := twoCopies(t)
+	id := idOf(t, ours, "Bank")
+	if err := theirs.Delete(id); err != nil {
+		t.Fatal(err)
+	}
+	e, _, _, _, err := theirs.findEntry(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tw := w.Now()
+	tw.Time = time.Now().Add(time.Hour)
+	e.Times.LocationChanged = &tw
+
+	res, err := ours.Merge(theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Updated != 1 {
+		t.Errorf("Updated = %d, want 1", res.Updated)
+	}
+	d, err := ours.Detail(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.InRecycleBin {
+		t.Error("Bank was not moved into the recycle bin by merge")
+	}
+}

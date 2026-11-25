@@ -4,6 +4,9 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+
+	"github.com/tobischo/gokeepasslib/v3"
+	w "github.com/tobischo/gokeepasslib/v3/wrappers"
 )
 
 func TestAddUpdateDelete(t *testing.T) {
@@ -404,6 +407,37 @@ func TestUpdateMovesEntryWhenTheGroupChanges(t *testing.T) {
 	}
 }
 
+// TestUpdateToAMissingGroupChangesNothing covers a draft whose group is
+// gone. The update has to fail as a whole, not rewrite the fields and then
+// fail to move.
+func TestUpdateToAMissingGroupChangesNothing(t *testing.T) {
+	v := openWritable(t, "kdbx40-password.kdbx")
+	id := idOf(t, v, "Bank")
+	before, err := v.History(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = v.Update(id, Draft{Title: "Renamed", GroupID: "no-such-group"})
+	if !errors.Is(err, ErrGroupNotFound) {
+		t.Fatalf("Update = %v, want ErrGroupNotFound", err)
+	}
+	d, err := v.Detail(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Title != "Bank" {
+		t.Errorf("Title = %q, want Bank", d.Title)
+	}
+	after, err := v.History(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Errorf("history grew from %d to %d", len(before), len(after))
+	}
+}
+
 // TestUpdateKeepsTheTOTPSeedTheDraftLeavesEmpty covers the editor's one-time
 // code field, which never loads the stored seed and sends an empty one to
 // mean unchanged.
@@ -482,5 +516,72 @@ func TestUpdateRemovesTheOneTimeCodeWhenAsked(t *testing.T) {
 	// Only the seed goes. The custom field beside it stays.
 	if got, err := v.Reveal(legacy, "Account ID"); err != nil || got != "42" {
 		t.Errorf("Account ID = %q, %v, want it untouched", got, err)
+	}
+}
+
+// TestUpdateReplacingLegacyTOTPDropsLegacyFields covers replacing an older
+// TOTP Seed/TOTP Settings pair with a new bare seed: the stale settings must
+// not linger and alter the new seed's period or digit count.
+func TestUpdateReplacingLegacyTOTPDropsLegacyFields(t *testing.T) {
+	v := openWritable(t, "kdbx40-password.kdbx")
+	pair := map[string]string{"TOTP Seed": "JBSWY3DPEHPK3PXP", "TOTP Settings": "60;8"}
+	id, err := v.Add(Draft{
+		Title:           "Legacy",
+		Custom:          pair,
+		ProtectedCustom: []string{"TOTP Seed"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := v.Update(id, Draft{
+		Title:           "Legacy",
+		TOTPSeed:        "GEZDGNBVGY3TQOJQ",
+		Custom:          pair,
+		ProtectedCustom: []string{"TOTP Seed"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	seed, err := v.TOTPSeed(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seed != "GEZDGNBVGY3TQOJQ" {
+		t.Errorf("TOTPSeed = %q, want GEZDGNBVGY3TQOJQ without stale settings", seed)
+	}
+	d, err := v.Detail(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range d.Custom {
+		if f.Key == "TOTP Seed" || f.Key == "TOTP Settings" {
+			t.Errorf("stale legacy TOTP field %q remained after replacement", f.Key)
+		}
+	}
+}
+
+func TestRestoreConcurrentWithCloseNeverPanics(t *testing.T) {
+	for i := 0; i < 500; i++ {
+		db := gokeepasslib.NewDatabase()
+		root := gokeepasslib.NewGroup()
+		root.Name = "Root"
+		db.Content.Root.Groups = []gokeepasslib.Group{root}
+		db.Content.Meta.RecycleBinEnabled = w.NewBoolWrapper(true)
+		v := &Vault{db: db}
+		id, err := v.Add(Draft{Title: "Bank", Password: "p"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := v.Delete(id); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = v.Restore(id, "")
+		}()
+		v.Close()
+		<-done
 	}
 }

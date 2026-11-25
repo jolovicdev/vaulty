@@ -409,12 +409,81 @@ func TestBrowserURLGivesABareAddressAScheme(t *testing.T) {
 		{"github.com", "https://github.com"},
 		{"  github.com/login ", "https://github.com/login"},
 		{"nas.local:5001", "https://nas.local:5001"},
+		{"localhost:8080/login", "https://localhost:8080/login"},
+		{"login.example.com/auth?next=https://app.example.com", "https://login.example.com/auth?next=https://app.example.com"},
 		{"https://github.com", "https://github.com"},
 		{"http://intranet/login", "http://intranet/login"},
 	}
 	for _, c := range cases {
-		if got := browserURL(c.raw); got != c.want {
-			t.Errorf("browserURL(%q) = %q, want %q", c.raw, got, c.want)
+		got, err := browserURL(c.raw)
+		if err != nil || got != c.want {
+			t.Errorf("browserURL(%q) = %q, %v, want %q", c.raw, got, err, c.want)
 		}
+	}
+}
+
+// TestBrowserURLRefusesOtherSchemes covers a vault from someone else: the
+// system opener runs whatever handler a scheme maps to, and a file URL can
+// name a program on disk.
+func TestBrowserURLRefusesOtherSchemes(t *testing.T) {
+	for _, raw := range []string{
+		"",
+		"   ",
+		"file:///usr/bin/xterm",
+		"FILE:///etc/passwd",
+		"file:/etc/passwd",
+		"smb://server/share",
+		"javascript://alert(1)",
+		"javascript:alert(1)",
+		"https://",
+	} {
+		if got, err := browserURL(raw); err == nil {
+			t.Errorf("browserURL(%q) = %q, want an error", raw, got)
+		}
+	}
+}
+
+// TestStaleIdleTimerLeavesANewSessionOpen covers an idle timer that fired
+// while another vault was being opened. Stopping a timer does not recall a
+// callback already running, so the callback has to check the session it
+// was armed for is still the open one.
+func TestStaleIdleTimerLeavesANewSessionOpen(t *testing.T) {
+	a := newTestApp(t, 60)
+	openTestVault(t, a)
+	a.mu.Lock()
+	old := a.v
+	a.mu.Unlock()
+
+	openTestVault(t, a)
+	a.lockIf(old)
+
+	if !a.Status().Unlocked {
+		t.Error("a timer armed for the previous vault locked the new one")
+	}
+}
+
+// TestSaveSettingsPreservesRecentVaults covers saving preferences from a
+// frontend holding settings loaded before a vault was created or unlocked.
+func TestSaveSettingsPreservesRecentVaults(t *testing.T) {
+	a := newTestApp(t, 300)
+	stale := a.LoadSettings()
+
+	vaultPath := filepath.Join(t.TempDir(), "fresh.kdbx")
+	if _, err := a.CreateVault(vaultPath, "master", ""); err != nil {
+		t.Fatal(err)
+	}
+	defer a.Lock()
+
+	stale.Theme = settings.ThemeLight
+	if err := a.SaveSettings(stale); err != nil {
+		t.Fatal(err)
+	}
+
+	got := a.LoadSettings()
+	if len(got.Recent) != 1 || got.Recent[0].Path != vaultPath {
+		t.Errorf("Recent = %+v, want [%s]", got.Recent, vaultPath)
+	}
+	if got.Theme != settings.ThemeLight {
+		t.Errorf("Theme = %q, want light", got.Theme)
 	}
 }
