@@ -81,6 +81,7 @@ export const api = {
   loadSettings: () => call<Settings>('LoadSettings'),
   saveSettings: (s: Settings) => call<void>('SaveSettings', s),
   settingsPath: () => call<string>('SettingsPath'),
+  version: () => call<string>('Version'),
   forgetRecent: (path: string) => call<void>('ForgetRecent', path),
 
   list: (opts: ListOptions) => call<Meta[]>('List', opts),

@@ -28,11 +28,14 @@ export function SettingsPanel({
 }) {
   const [draft, setDraft] = useState(settings)
   const [path, setPath] = useState('')
+  const [version, setVersion] = useState('')
   const [backups, setBackups] = useState<string[]>([])
 
   useEffect(() => {
     void (async () => {
-      setPath(await api.settingsPath())
+      const [p, v] = await Promise.all([api.settingsPath(), api.version().catch(() => '')])
+      setPath(p)
+      setVersion(v)
       if (status.unlocked) {
         try {
           setBackups(await api.backups())
@@ -123,6 +126,12 @@ export function SettingsPanel({
         )}
 
         <div className="flex flex-col gap-1 border-t border-line pt-4 text-sm text-text-3">
+          {version && (
+            <span className="flex gap-2">
+              <span className="w-[92px] shrink-0">Version</span>
+              <span className="font-mono tabular">v{version}</span>
+            </span>
+          )}
           <span className="flex gap-2">
             <span className="w-[92px] shrink-0">Settings file</span>
             <span className="min-w-0 truncate font-mono">{path || 'unavailable'}</span>

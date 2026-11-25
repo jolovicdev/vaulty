@@ -12,6 +12,7 @@
   },
   "info": {
     "productName": "Vaulty",
+    "productVersion": "0.3.0",
     "comments": "A local password manager. One encrypted KDBX file, no server, no network."
   }
 }

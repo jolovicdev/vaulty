@@ -28,6 +28,10 @@ import (
 	"github.com/jolovicdev/vaulty/internal/vault"
 )
 
+// appVersion is the release version reported in Settings. Release builds may
+// also override it with -ldflags "-X main.appVersion=...".
+var appVersion = "0.3.0"
+
 // eventLocked tells the frontend to drop every cached value and show the
 // unlock screen. It is emitted for an idle lock as well as an explicit one.
 const eventLocked = "vault:locked"
@@ -228,6 +232,11 @@ func (a *App) SettingsPath() string {
 		return ""
 	}
 	return a.store.Path()
+}
+
+// Version returns the application version shown in Settings.
+func (a *App) Version() string {
+	return appVersion
 }
 
 // Session state

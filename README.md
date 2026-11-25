@@ -31,17 +31,21 @@ few letters, and `Enter` copies the password.
 ## Features
 
 - Opens and saves KeePass vaults (KDBX 3.1 and 4) with a master password, a
-  key file, or both
+  key file, or both, and rotates master credentials with fresh salts and IVs
 - Command palette and fuzzy search across titles, usernames, URLs and tags
-- One-time codes (TOTP) with a countdown, read from the same field KeePassXC
-  uses
+- One-time codes (TOTP) with a countdown, offline QR code display, and QR
+  import from an image file or pasted screenshot
 - Password and passphrase generator backed by `crypto/rand` and the EFF word
   list
+- Offline vault health audit for weak, reused, expired and soon-expiring
+  entries
 - Imports the unencrypted exports of Proton Pass, Bitwarden and 1Password
-- Custom fields, tags, notes, entry history with restore, and a recycle bin
-  KeePassXC recognises as its own
-- Saves every change by itself, atomically, and keeps five rolling backups
-  beside the vault
+- Group management (create, rename, move, delete), custom fields with copy and
+  additional URL open actions, tags, notes, entry expiry dates, duplication,
+  entry history with restore, and a recycle bin KeePassXC recognises as its own
+- Saves every change by itself, atomically, keeps five rolling backups beside
+  the vault, checks for external disk changes on focus, and previews merges
+  before applying them
 - Clears a copied password from the clipboard after 15 seconds and keeps it
   out of Windows Clipboard History
 - Locks itself after five minutes idle
@@ -157,10 +161,10 @@ One check stays manual, because `keepassxc-cli` only writes KDBX 3.1: create a
 KDBX 4 database in the KeePassXC GUI with a protected custom field and a TOTP
 secret, open and edit it in Vaulty, then open it in KeePassXC again.
 
-A KDBX 4 vault whose key derivation is set to Argon2id does not open.
-gokeepasslib derives keys with Argon2d or AES-KDF only, so the file is
-reported as a wrong password. In KeePassXC the setting is under Database
-Settings, Encryption.
+A KDBX 4 vault whose key derivation is set to Argon2id does not open yet.
+gokeepasslib derives keys with Argon2d or AES-KDF only, so Vaulty detects the
+Argon2id KDF header and asks you to switch to Argon2d in KeePassXC under
+Database Settings, Encryption.
 
 ## Security
 
@@ -203,6 +207,7 @@ internal/vault           KDBX open, list, reveal, edit, save, merge
 internal/clipboard       Per-OS clipboard with a timed clear
 internal/generator       crypto/rand passwords and EFF passphrases
 internal/totp            otpauth URIs and RFC 6238 codes
+internal/qr              Offline QR code encoder and image decoder
 internal/importer        Proton Pass, Bitwarden and 1Password exports
 internal/settings        JSON preferences in the OS config dir. No secrets
 internal/strength        Pattern-based guess estimate
