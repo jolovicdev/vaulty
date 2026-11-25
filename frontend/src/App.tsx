@@ -5,6 +5,7 @@ import {
   Lock,
   MoreHorizontal,
   Settings as SettingsIcon,
+  ShieldCheck,
   Wand2,
 } from 'lucide-react'
 import { EVENT_CLOSE_REQUESTED, EVENT_CONFLICT, EVENT_LOCKED, api, on } from './lib/api'
@@ -29,6 +30,7 @@ import { Menu, anchorFromButton, type MenuAnchor, type MenuEntry } from './compo
 import { MoveDialog } from './components/MoveDialog'
 import { ImportDialog } from './components/ImportDialog'
 import { CredentialsDialog } from './components/CredentialsDialog'
+import { AuditDialog } from './components/AuditDialog'
 import { appMenu, entryMenu, groupMenu } from './lib/actions'
 
 type Overlay =
@@ -46,6 +48,7 @@ type Overlay =
   | { kind: 'move'; detail: Meta }
   | { kind: 'import'; path: string }
   | { kind: 'credentials' }
+  | { kind: 'audit' }
   | { kind: 'unsaved'; intent: UnsavedIntent }
 
 /** Applies the theme choice. The dark values are the document default, so
@@ -247,6 +250,10 @@ export function App() {
   // has to reach the footer rather than end as an unhandled rejection.
   const openUrl = useCallback((id: string) => {
     api.openUrl(id).catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }, [])
+
+  const openFieldUrl = useCallback((id: string, field: string) => {
+    api.openFieldUrl(id, field).catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
   const refreshAfterWrite = useCallback(
@@ -533,6 +540,9 @@ export function App() {
       case 'changeCredentials':
         setOverlay({ kind: 'credentials' })
         return
+      case 'audit':
+        setOverlay({ kind: 'audit' })
+        return
     }
   }
 
@@ -600,6 +610,7 @@ export function App() {
               onEdit={() => detail && setOverlay({ kind: 'editor', detail })}
               onHistory={() => detail && setOverlay({ kind: 'history', id: detail.id })}
               onOpenUrl={openUrl}
+              onOpenFieldUrl={openFieldUrl}
               onDelete={() => detail && void deleteEntry(detail)}
               onRestore={() =>
                 detail && void api.restoreEntry(detail.id, '').then(() => refreshAfterWrite())
@@ -655,6 +666,12 @@ export function App() {
         )}
         <span className="flex-1" />
         <IconButton
+          label="Vault health"
+          onClick={() => setOverlay({ kind: 'audit' })}
+        >
+          <ShieldCheck size={13} />
+        </IconButton>
+        <IconButton
           label={SHORTCUTS.generator.label}
           keys={SHORTCUTS.generator.keys}
           onClick={() => setOverlay({ kind: 'generator' })}
@@ -688,6 +705,7 @@ export function App() {
                   openVault: () => void browseVault(),
                   createVault: () => void createVault(),
                   importFile: () => void importFile(),
+                  audit: () => setOverlay({ kind: 'audit' }),
                   generator: () => setOverlay({ kind: 'generator' }),
                   save: () => void save(),
                   settings: () => setOverlay({ kind: 'settings' }),
@@ -751,6 +769,16 @@ export function App() {
           onChanged={() => {
             void refreshSettings()
             void api.status().then(setStatus)
+          }}
+        />
+      )}
+      {overlay.kind === 'audit' && (
+        <AuditDialog
+          onClose={() => setOverlay({ kind: 'none' })}
+          onSelectEntry={(id) => {
+            setSelection(ALL)
+            setQuery('')
+            setSelectedId(id)
           }}
         />
       )}

@@ -939,6 +939,18 @@ func (a *App) EstimateStrength(password string) strength.Result {
 	return strength.Estimate(password, a.dict)
 }
 
+// Audit checks every active entry for weak, reused, expired or soon-expiring
+// credentials. Passwords stay inside Go.
+func (a *App) Audit() (vault.AuditReport, error) {
+	var out vault.AuditReport
+	err := a.withVault(func(v *vault.Vault) error {
+		var err error
+		out, err = v.Audit(a.dict, time.Now())
+		return err
+	})
+	return out, err
+}
+
 // File pickers
 //
 // These are the OS dialogs, so the unlock screen does not make the user type
@@ -1022,15 +1034,21 @@ func (a *App) Confirm(title, message string) bool {
 	}
 }
 
-// OpenURL hands a URL to the desktop's browser. Nothing in this app fetches
-// a URL itself.
+// OpenURL hands an entry's primary URL to the desktop's browser. Nothing in
+// this app fetches a URL itself.
 func (a *App) OpenURL(id string) error {
+	return a.OpenFieldURL(id, vault.FieldURL)
+}
+
+// OpenFieldURL hands any named URL field (such as URL or KP2A_URL_1) to the
+// desktop's browser after validating its scheme.
+func (a *App) OpenFieldURL(id, field string) error {
 	return a.withVault(func(v *vault.Vault) error {
-		url, err := v.Reveal(id, vault.FieldURL)
+		url, err := v.Reveal(id, field)
 		if err != nil {
 			return err
 		}
-		if url == "" {
+		if strings.TrimSpace(url) == "" {
 			return errors.New("entry has no URL")
 		}
 		target, err := browserURL(url)

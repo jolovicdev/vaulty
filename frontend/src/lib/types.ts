@@ -173,6 +173,26 @@ export interface ImportPreview {
   warnings: string[]
 }
 
+export interface AuditFinding {
+  entry: Meta
+  score: number
+  label: string
+  warning: string
+  entropy: number
+}
+
+export interface ReusedGroup {
+  entries: Meta[]
+}
+
+export interface AuditReport {
+  weak: AuditFinding[]
+  reused: ReusedGroup[]
+  expired: Meta[]
+  expiringSoon: Meta[]
+  totalChecked: number
+}
+
 /** Field names as KeePass stores them, so a reveal names the right key. */
 export const FIELD = {
   title: 'Title',

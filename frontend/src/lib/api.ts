@@ -2,6 +2,7 @@
 // from here, so the bridge can be swapped out at this one seam.
 
 import type {
+  AuditReport,
   ConflictChoice,
   ConflictResult,
   CopyResult,
@@ -121,6 +122,8 @@ export const api = {
 
   totp: (id: string) => call<TotpCode>('TOTP', id),
   openUrl: (id: string) => call<void>('OpenURL', id),
+  openFieldUrl: (id: string, field: string) => call<void>('OpenFieldURL', id, field),
+  audit: () => call<AuditReport>('Audit'),
 
   generatePassword: (o: PasswordOptions) => call<string>('GeneratePassword', o),
   generatePassphrase: (o: PassphraseOptions) => call<string>('GeneratePassphrase', o),

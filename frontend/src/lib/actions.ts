@@ -18,6 +18,7 @@ import {
   Plus,
   RotateCcw,
   Settings as SettingsIcon,
+  ShieldCheck,
   Timer,
   Trash2,
   User,
@@ -215,6 +216,7 @@ export interface AppHandlers {
   openVault: () => void
   createVault: () => void
   importFile: () => void
+  audit: () => void
   generator: () => void
   save: () => void
   settings: () => void
@@ -244,6 +246,7 @@ export function appMenu(h: AppHandlers, dirty: boolean): MenuEntry[] {
     },
     { id: 'createVault', label: 'Create a vault', icon: icon(Database), run: h.createVault },
     { id: 'importFile', label: IMPORT_LABEL, icon: icon(Import), run: h.importFile },
+    { id: 'audit', label: 'Vault health', icon: icon(ShieldCheck), run: h.audit },
     {
       id: 'generator',
       label: SHORTCUTS.generator.label,

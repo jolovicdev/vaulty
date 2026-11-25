@@ -32,6 +32,15 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function customFieldLabel(key: string): string {
+  const m = /^KP2A_URL_(\d+)$/.exec(key)
+  return m ? `URL ${Number(m[1]) + 1}` : key
+}
+
+function isAdditionalUrl(key: string, value: string, isProtected: boolean): boolean {
+  return !isProtected && /^KP2A_URL_\d+$/.test(key) && value.trim().length > 0
+}
+
 export function EntryDetail({
   detail,
   detailRev = 0,
@@ -41,6 +50,7 @@ export function EntryDetail({
   onRestore,
   onHistory,
   onOpenUrl,
+  onOpenFieldUrl,
   onMenu,
 }: {
   detail: Detail | null
@@ -51,6 +61,7 @@ export function EntryDetail({
   onRestore: () => void
   onHistory: () => void
   onOpenUrl: (id: string) => void
+  onOpenFieldUrl: (id: string, field: string) => void
   onMenu: (detail: Detail, anchor: MenuAnchor) => void
 }) {
   const [held, setHeld] = useState<Revealed | null>(null)
@@ -276,7 +287,7 @@ export function EntryDetail({
         {detail.custom.length > 0 && (
           <Group>
             {detail.custom.map((f) => (
-              <Row key={f.key} label={f.key}>
+              <Row key={f.key} label={customFieldLabel(f.key)}>
                 <span className="min-w-0 flex-1 truncate">
                   {f.protected ? (
                     revealed?.field === f.key ? (
@@ -289,18 +300,24 @@ export function EntryDetail({
                   )}
                 </span>
                 {f.protected && (
-                  <>
-                    <RevealButton
-                      shown={revealed?.field === f.key}
-                      label={f.key}
-                      onClick={() => void toggle(f.key)}
-                    />
-                    <CopyButton
-                      label={`Copy ${f.key}`}
-                      onCopy={() => api.copyField(detail.id, f.key)}
-                    />
-                  </>
+                  <RevealButton
+                    shown={revealed?.field === f.key}
+                    label={f.key}
+                    onClick={() => void toggle(f.key)}
+                  />
                 )}
+                {isAdditionalUrl(f.key, f.value, f.protected) && (
+                  <IconButton
+                    label={`Open ${customFieldLabel(f.key)}`}
+                    onClick={() => onOpenFieldUrl(detail.id, f.key)}
+                  >
+                    <ExternalLink size={13} />
+                  </IconButton>
+                )}
+                <CopyButton
+                  label={`Copy ${customFieldLabel(f.key)}`}
+                  onCopy={() => api.copyField(detail.id, f.key)}
+                />
               </Row>
             ))}
           </Group>
