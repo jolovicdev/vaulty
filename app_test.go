@@ -1,12 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jolovicdev/vaulty/internal/qr"
 	"github.com/jolovicdev/vaulty/internal/settings"
 	"github.com/jolovicdev/vaulty/internal/vault"
 )
@@ -485,5 +492,64 @@ func TestSaveSettingsPreservesRecentVaults(t *testing.T) {
 	}
 	if got.Theme != settings.ThemeLight {
 		t.Errorf("Theme = %q, want light", got.Theme)
+	}
+}
+
+func TestTOTPQRExportAndImportRoundTrip(t *testing.T) {
+	a := newTestApp(t, 300)
+	id := openTestVault(t, a)
+
+	dataURI, err := a.TOTPQR(id)
+	if err != nil {
+		t.Fatalf("TOTPQR: %v", err)
+	}
+	if !strings.HasPrefix(dataURI, "data:image/svg+xml;base64,") {
+		t.Fatalf("unexpected data URI prefix: %.40q", dataURI)
+	}
+
+	const wantURI = "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP"
+	m, err := qr.Encode(wantURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const scale, margin = 4, 4
+	dim := (m.Size + 2*margin) * scale
+	img := image.NewGray(image.Rect(0, 0, dim, dim))
+	for y := 0; y < dim; y++ {
+		for x := 0; x < dim; x++ {
+			img.SetGray(x, y, color.Gray{Y: 255})
+		}
+	}
+	for my := 0; my < m.Size; my++ {
+		for mx := 0; mx < m.Size; mx++ {
+			if !m.At(mx, my) {
+				continue
+			}
+			for dy := 0; dy < scale; dy++ {
+				for dx := 0; dx < scale; dx++ {
+					img.SetGray((mx+margin)*scale+dx, (my+margin)*scale+dy, color.Gray{Y: 0})
+				}
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+
+	// DecodeQRFile path.
+	imgPath := filepath.Join(t.TempDir(), "totp.png")
+	if err := os.WriteFile(imgPath, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gotFile, err := a.DecodeQRFile(imgPath)
+	if err != nil || gotFile != wantURI {
+		t.Errorf("DecodeQRFile = %q, %v, want %q", gotFile, err, wantURI)
+	}
+
+	// DecodeQRBytes path (clipboard paste).
+	gotBytes, err := a.DecodeQRBytes("data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()))
+	if err != nil || gotBytes != wantURI {
+		t.Errorf("DecodeQRBytes = %q, %v, want %q", gotBytes, err, wantURI)
 	}
 }

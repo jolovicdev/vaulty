@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/base32"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	neturl "net/url"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +21,7 @@ import (
 	"github.com/jolovicdev/vaulty/internal/clipboard"
 	"github.com/jolovicdev/vaulty/internal/generator"
 	"github.com/jolovicdev/vaulty/internal/importer"
+	"github.com/jolovicdev/vaulty/internal/qr"
 	"github.com/jolovicdev/vaulty/internal/settings"
 	"github.com/jolovicdev/vaulty/internal/strength"
 	"github.com/jolovicdev/vaulty/internal/totp"
@@ -920,6 +926,121 @@ func (a *App) TOTP(id string) (TOTPCode, error) {
 		return nil
 	})
 	return out, err
+}
+
+const maxQRImageBytes = 16 << 20
+
+// TOTPQR encodes an entry's one-time-code URI as a data-URI SVG QR code so
+// the user can scan it onto a phone authenticator. Like Reveal, it is only
+// called on explicit user action.
+func (a *App) TOTPQR(id string) (string, error) {
+	var dataURI string
+	err := a.withVault(func(v *vault.Vault) error {
+		seed, err := v.TOTPSeed(id)
+		if err != nil {
+			return err
+		}
+		cfg, err := totp.Parse(seed)
+		if err != nil {
+			return err
+		}
+		uri := strings.TrimSpace(seed)
+		if !strings.HasPrefix(strings.ToLower(uri), "otpauth://") {
+			detail, err := v.Detail(id)
+			if err != nil {
+				return err
+			}
+			uri = buildOtpauthURI(detail.Title, detail.Username, cfg)
+		}
+		svg, err := qr.EncodeSVG(uri)
+		if err != nil {
+			return err
+		}
+		dataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg))
+		return nil
+	})
+	return dataURI, err
+}
+
+func buildOtpauthURI(title, username string, cfg totp.Config) string {
+	label := title
+	if label == "" {
+		label = "Vaulty"
+	}
+	if username != "" {
+		label += ":" + username
+	}
+	secret := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(cfg.Secret)
+	q := neturl.Values{}
+	q.Set("secret", secret)
+	if title != "" {
+		q.Set("issuer", title)
+	}
+	if cfg.Digits != totp.DefaultDigits {
+		q.Set("digits", strconv.Itoa(cfg.Digits))
+	}
+	if cfg.Period != totp.DefaultPeriod {
+		q.Set("period", strconv.Itoa(cfg.Period))
+	}
+	if cfg.Algorithm != "" && cfg.Algorithm != totp.AlgoSHA1 {
+		q.Set("algorithm", cfg.Algorithm)
+	}
+	return "otpauth://totp/" + neturl.PathEscape(label) + "?" + q.Encode()
+}
+
+// PickQRImage asks for an image file holding a one-time-code QR code.
+func (a *App) PickQRImage() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Choose a QR code image",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Images (*.png, *.jpg, *.jpeg, *.gif)", Pattern: "*.png;*.jpg;*.jpeg;*.gif"},
+			{DisplayName: "All files", Pattern: "*"},
+		},
+	})
+}
+
+// DecodeQRFile reads an image from disk and extracts a valid TOTP URI or seed.
+func (a *App) DecodeQRFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	data, err := io.ReadAll(io.LimitReader(f, maxQRImageBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > maxQRImageBytes {
+		return "", errors.New("image is too large")
+	}
+	return decodeTOTPQR(data)
+}
+
+// DecodeQRBytes extracts a valid TOTP URI or seed from base64-encoded image
+// bytes (for instance a screenshot pasted into the editor).
+func (a *App) DecodeQRBytes(encoded string) (string, error) {
+	if i := strings.Index(encoded, ","); i >= 0 && strings.HasPrefix(encoded, "data:") {
+		encoded = encoded[i+1:]
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil {
+		return "", errors.New("could not read pasted image")
+	}
+	if len(data) > maxQRImageBytes {
+		return "", errors.New("image is too large")
+	}
+	return decodeTOTPQR(data)
+}
+
+func decodeTOTPQR(data []byte) (string, error) {
+	text, err := qr.DecodeBytes(data)
+	if err != nil {
+		return "", err
+	}
+	if _, err := totp.Parse(text); err != nil {
+		return "", errors.New("the QR code does not contain a valid one-time code")
+	}
+	return strings.TrimSpace(text), nil
 }
 
 // Generator and strength

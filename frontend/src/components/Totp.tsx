@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { QrCode } from 'lucide-react'
 import { api } from '../lib/api'
 import type { TotpCode } from '../lib/types'
 import { CopyButton } from './CopyButton'
+import { Button, Dialog, IconButton } from './primitives'
 import { SHORTCUTS } from '../lib/shortcuts'
 
 /** Ring draws the time left in the current step. The stroke is a text tone,
@@ -33,6 +35,17 @@ function Ring({ fraction }: { fraction: number }) {
 export function Totp({ entryId, refreshKey = 0 }: { entryId: string; refreshKey?: number }) {
   const [code, setCode] = useState<TotpCode | null>(null)
   const [remaining, setRemaining] = useState(0)
+  const [qrState, setQrState] = useState<{ entryId: string; src: string } | null>(null)
+  const qrSrc = qrState?.entryId === entryId ? qrState.src : ''
+
+  async function openQr() {
+    try {
+      const src = await api.totpQr(entryId)
+      setQrState({ entryId, src })
+    } catch {
+      setQrState(null)
+    }
+  }
 
   useEffect(() => {
     let live = true
@@ -83,6 +96,33 @@ export function Totp({ entryId, refreshKey = 0 }: { entryId: string; refreshKey?
         keys={SHORTCUTS.copyTotp.keys}
         onCopy={() => api.copyTotp(entryId)}
       />
+      <IconButton label="Show QR code" onClick={() => void openQr()}>
+        <QrCode size={13} />
+      </IconButton>
+      {qrSrc && (
+        <Dialog
+          title="One-time code QR"
+          description={code.issuer || code.account || undefined}
+          onClose={() => setQrState(null)}
+          width="w-[340px]"
+          footer={
+            <Button variant="quiet" onClick={() => setQrState(null)}>
+              Close
+            </Button>
+          }
+        >
+          <div className="flex flex-col items-center gap-3 p-5">
+            <img
+              src={qrSrc}
+              alt="One-time code QR"
+              className="h-[220px] w-[220px] rounded-sm border border-line bg-white"
+            />
+            <p className="text-center text-sm text-text-3">
+              Scan with an authenticator app. This QR carries the secret and disappears when closed.
+            </p>
+          </div>
+        </Dialog>
+      )}
     </div>
   )
 }

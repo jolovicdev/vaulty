@@ -123,6 +123,10 @@ export const api = {
   clearClipboard: () => call<void>('ClearClipboard'),
 
   totp: (id: string) => call<TotpCode>('TOTP', id),
+  totpQr: (id: string) => call<string>('TOTPQR', id),
+  pickQrImage: () => call<string>('PickQRImage'),
+  decodeQrFile: (path: string) => call<string>('DecodeQRFile', path),
+  decodeQrBytes: (base64: string) => call<string>('DecodeQRBytes', base64),
   openUrl: (id: string) => call<void>('OpenURL', id),
   openFieldUrl: (id: string, field: string) => call<void>('OpenFieldURL', id, field),
   audit: () => call<AuditReport>('Audit'),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Eye, EyeOff, Plus, Wand2, X } from 'lucide-react'
+import { Eye, EyeOff, Plus, QrCode, Wand2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { FIELD, type Detail, type Draft, type GroupNode, type StrengthResult } from '../lib/types'
 import { Button, Dialog, Field, IconButton, Input, Secret, Select, Textarea } from './primitives'
@@ -123,6 +123,45 @@ export function EntryEditor({
       live = false
     }
   }, [password, showStrength])
+
+  async function importQrFile() {
+    try {
+      const path = await api.pickQrImage()
+      if (!path) return
+      const uri = await api.decodeQrFile(path)
+      setRemoveTotp(false)
+      setTotpSeed(uri)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  function handleTotpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = () => {
+          if (typeof reader.result !== 'string') return
+          void api
+            .decodeQrBytes(reader.result)
+            .then((uri) => {
+              setRemoveTotp(false)
+              setTotpSeed(uri)
+              setError('')
+            })
+            .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+        }
+        reader.readAsDataURL(file)
+        return
+      }
+    }
+  }
 
   async function submit() {
     if (!loaded || saving) return
@@ -306,22 +345,31 @@ export function EntryEditor({
               for an entry that has a code to take off. */}
           <Field
             label="One-time code secret"
-            hint="otpauth:// URI or base32 seed"
+            hint="otpauth:// URI, base32 seed, or paste QR image"
             actions={
-              detail?.hasTotp ? (
-                // The action row's gap is sized for icon buttons, which carry
-                // their own padding. A bare checkbox needs the rest to sit as
-                // far from its input as Protect does in the rows below.
-                <span className="flex items-center pl-1">
-                  <Toggle label="Remove" checked={removeTotp} onChange={setRemoveTotp} />
-                </span>
-              ) : undefined
+              <>
+                <IconButton
+                  label="Import QR code from image"
+                  onClick={() => void importQrFile()}
+                >
+                  <QrCode size={14} />
+                </IconButton>
+                {detail?.hasTotp && (
+                  // The action row's gap is sized for icon buttons, which carry
+                  // their own padding. A bare checkbox needs the rest to sit as
+                  // far from its input as Protect does in the rows below.
+                  <span className="flex items-center pl-1">
+                    <Toggle label="Remove" checked={removeTotp} onChange={setRemoveTotp} />
+                  </span>
+                )}
+              </>
             }
           >
             <Input
               mono
               value={removeTotp ? '' : totpSeed}
               onChange={(e) => setTotpSeed(e.target.value)}
+              onPaste={handleTotpPaste}
               disabled={removeTotp}
               placeholder={
                 removeTotp
