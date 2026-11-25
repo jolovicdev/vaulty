@@ -13,6 +13,7 @@ import type {
   HistoryVersion,
   ImportPreview,
   ListOptions,
+  MergeResult,
   Meta,
   PassphraseOptions,
   PasswordOptions,
@@ -108,6 +109,7 @@ export const api = {
 
   save: () => call<void>('Save'),
   diskState: () => call<DiskState>('DiskState'),
+  previewMerge: () => call<MergeResult>('PreviewMerge'),
   resolveConflict: (choice: ConflictChoice) => call<ConflictResult>('ResolveConflict', choice),
   backups: () => call<string[]>('Backups'),
 

@@ -1,7 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import type { ConflictChoice, ConflictResult } from '../lib/types'
+import type { ConflictChoice, ConflictResult, MergeResult } from '../lib/types'
 import { Button, Dialog } from './primitives'
+
+function formatPreview(m: MergeResult): string {
+  const parts: string[] = []
+  if (m.added > 0) parts.push(`+${m.added} added`)
+  if (m.updated > 0) parts.push(`${m.updated} updated`)
+  if (m.deleted > 0) parts.push(`${m.deleted} deleted`)
+  if (parts.length === 0) return 'No entry differences found between memory and disk.'
+  const unchanged = m.skipped > 0 ? ` (${m.skipped} unchanged)` : ''
+  return `Preview: ${parts.join(', ')}${unchanged}.`
+}
 
 const CHOICES: { id: ConflictChoice; label: string; detail: string }[] = [
   {
@@ -32,7 +42,23 @@ export function ConflictDialog({
   onResolved: (r: ConflictResult) => void
 }) {
   const [busy, setBusy] = useState<ConflictChoice | null>(null)
+  const [preview, setPreview] = useState<MergeResult | null>(null)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      try {
+        const res = await api.previewMerge()
+        if (live) setPreview(res)
+      } catch {
+        // Disk file may be unreadable or using different credentials; keep dialog usable.
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [])
 
   async function choose(choice: ConflictChoice) {
     setBusy(choice)
@@ -73,6 +99,9 @@ export function ConflictDialog({
                 {busy === c.id ? 'Working' : c.label}
               </Button>
               <p className="measure text-base leading-relaxed text-text-3">{c.detail}</p>
+              {c.id === 'merge' && preview && (
+                <p className="font-mono text-sm text-text-2 tabular">{formatPreview(preview)}</p>
+              )}
             </li>
           ))}
         </ul>

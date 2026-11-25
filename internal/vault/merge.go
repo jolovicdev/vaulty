@@ -16,29 +16,47 @@ type MergeResult struct {
 	Deleted int `json:"deleted"`
 }
 
-// Merge folds the other database into this one, entry by entry, keyed on
-// entry UUID and resolved by last modification time. This is the "both sides
-// changed" resolution for a vault kept in a sync folder.
-//
-// The rule is deliberately simple and only ever compares whole entries: the
-// newer modification time wins, ties keep what is already here, an entry that
-// exists only in other is added to the group with the matching path (created
-// when absent, or to the recycle bin when recycled in other) unless we
-// permanently deleted it more recently, and an entry the other side recorded
-// as deleted after our copy was last modified is removed. Field-level merging
-// is not attempted, because two clients editing one entry's separate fields
-// cannot be told apart from one client editing both.
-func (v *Vault) Merge(other *Vault) (MergeResult, error) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	other.mu.RLock()
-	defer other.mu.RUnlock()
+type mergePlan struct {
+	res       MergeResult
+	apply     []mergeTombstone
+	moves     []mergeMove
+	news      []mergeIncoming
+	updates   []mergeUpdate
+	myGroup   map[string]*gokeepasslib.Group
+	tombstone map[string]bool
+}
 
+type mergeTombstone struct {
+	id  string
+	del gokeepasslib.DeletedObjectData
+}
+
+type mergeMove struct {
+	id    string
+	segs  []string
+	inBin bool
+}
+
+type mergeIncoming struct {
+	entry gokeepasslib.Entry
+	segs  []string
+	inBin bool
+}
+
+type mergeUpdate struct {
+	ours   *gokeepasslib.Entry
+	theirs gokeepasslib.Entry
+}
+
+// planMerge computes what Merge(other) will do without mutating v. Both Merge
+// and PreviewMerge run this exact planner so the preview can never diverge
+// from the actual merge.
+func (v *Vault) planMerge(other *Vault) (mergePlan, error) {
 	if err := v.checkOpen(); err != nil {
-		return MergeResult{}, err
+		return mergePlan{}, err
 	}
 	if err := other.checkOpen(); err != nil {
-		return MergeResult{}, err
+		return mergePlan{}, err
 	}
 
 	mine := map[string]*gokeepasslib.Entry{}
@@ -71,19 +89,10 @@ func (v *Vault) Merge(other *Vault) (MergeResult, error) {
 		}
 	}
 
-	var res MergeResult
-	type incoming struct {
-		entry gokeepasslib.Entry
-		segs  []string
-		inBin bool
+	plan := mergePlan{
+		myGroup:   myGroup,
+		tombstone: map[string]bool{},
 	}
-	type relocation struct {
-		id    string
-		segs  []string
-		inBin bool
-	}
-	var news []incoming
-	var moves []relocation
 
 	other.walkSegments(func(g *gokeepasslib.Group, segs []string, inBin bool) bool {
 		for i := range g.Entries {
@@ -94,50 +103,42 @@ func (v *Vault) Merge(other *Vault) (MergeResult, error) {
 				if delAt, deleted := myDeleted[id]; deleted && !modTime(theirs).After(delAt) {
 					continue
 				}
-				news = append(news, incoming{
+				if inBin && (v.db.Content.Meta == nil || !v.db.Content.Meta.RecycleBinEnabled.Bool) {
+					continue
+				}
+				plan.news = append(plan.news, mergeIncoming{
 					entry: cloneEntry(theirs),
 					segs:  slices.Clone(segs),
 					inBin: inBin,
 				})
+				plan.res.Added++
 				continue
 			}
 			updated := false
 			if modTime(theirs).After(modTime(ours)) {
-				*ours = cloneEntry(theirs)
+				plan.updates = append(plan.updates, mergeUpdate{ours: ours, theirs: cloneEntry(theirs)})
 				updated = true
 			}
 			if locTime(theirs).After(locTime(ours)) &&
 				(inBin != myInBin[id] || !slices.Equal(segs, myPath[id])) {
-				moves = append(moves, relocation{
-					id:    id,
-					segs:  slices.Clone(segs),
-					inBin: inBin,
-				})
-				updated = true
+				if !inBin || (v.db.Content.Meta != nil && v.db.Content.Meta.RecycleBinEnabled.Bool) {
+					plan.moves = append(plan.moves, mergeMove{
+						id:    id,
+						segs:  slices.Clone(segs),
+						inBin: inBin,
+					})
+					updated = true
+				}
 			}
 			if updated {
-				res.Updated++
+				plan.res.Updated++
 			} else {
-				res.Skipped++
+				plan.res.Skipped++
 			}
 		}
 		return true
 	})
 
-	// Tombstones are applied before the additions and moves below, because
-	// creating a group reallocates the slices that mine and myGroup point
-	// into. Only entries that already existed can be tombstoned, so this
-	// order is also the correct one semantically.
-	//
-	// Which tombstones apply is settled before any entry is removed. A
-	// removal shifts the rest of its group along the slice, and a pointer in
-	// mine taken before that reads a neighbour's modification time after it.
-	type tombstone struct {
-		id  string
-		del gokeepasslib.DeletedObjectData
-	}
-	var apply []tombstone
-	tombstoned := map[string]bool{}
 	for _, del := range other.db.Content.Root.DeletedObjects {
 		if del.DeletionTime == nil {
 			continue
@@ -146,22 +147,73 @@ func (v *Vault) Merge(other *Vault) (MergeResult, error) {
 		if err != nil {
 			continue
 		}
-		ours, ok := mine[string(id)]
-		if !ok || modTime(ours).After(del.DeletionTime.Time) {
+		key := string(id)
+		ours, ok := mine[key]
+		if !ok || modTime(ours).After(del.DeletionTime.Time) || plan.tombstone[key] {
 			continue
 		}
-		apply = append(apply, tombstone{id: string(id), del: del})
-		tombstoned[string(id)] = true
+		plan.apply = append(plan.apply, mergeTombstone{id: key, del: del})
+		plan.tombstone[key] = true
+		plan.res.Deleted++
 	}
-	for _, t := range apply {
-		if err := removeEntry(myGroup[t.id], t.id); err == nil {
-			v.db.Content.Root.DeletedObjects = append(v.db.Content.Root.DeletedObjects, t.del)
-			res.Deleted++
-		}
+	return plan, nil
+}
+
+// PreviewMerge reports what Merge(other) would change without modifying v.
+func (v *Vault) PreviewMerge(other *Vault) (MergeResult, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	other.mu.RLock()
+	defer other.mu.RUnlock()
+	plan, err := v.planMerge(other)
+	if err != nil {
+		return MergeResult{}, err
+	}
+	return plan.res, nil
+}
+
+// Merge folds the other database into this one, entry by entry, keyed on
+// entry UUID and resolved by last modification time. This is the "both sides
+// changed" resolution for a vault kept in a sync folder.
+//
+// The rule is deliberately simple and only ever compares whole entries: the
+// newer modification time wins, ties keep what is already here, an entry that
+// exists only in other is added to the group with the matching path (created
+// when absent, or to the recycle bin when recycled in other) unless we
+// permanently deleted it more recently, and an entry the other side recorded
+// as deleted after our copy was last modified is removed. Field-level merging
+// is not attempted, because two clients editing one entry's separate fields
+// cannot be told apart from one client editing both.
+func (v *Vault) Merge(other *Vault) (MergeResult, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	other.mu.RLock()
+	defer other.mu.RUnlock()
+
+	plan, err := v.planMerge(other)
+	if err != nil {
+		return MergeResult{}, err
 	}
 
-	for _, mv := range moves {
-		if tombstoned[mv.id] {
+	for _, u := range plan.updates {
+		*u.ours = u.theirs
+	}
+
+	// Tombstones are applied before the additions and moves below, because
+	// creating a group reallocates the slices that plan.myGroup points into.
+	// Only entries that already existed can be tombstoned, so this order is
+	// also the correct one semantically.
+	var deleted int
+	for _, t := range plan.apply {
+		if err := removeEntry(plan.myGroup[t.id], t.id); err == nil {
+			v.db.Content.Root.DeletedObjects = append(v.db.Content.Root.DeletedObjects, t.del)
+			deleted++
+		}
+	}
+	plan.res.Deleted = deleted
+
+	for _, mv := range plan.moves {
+		if plan.tombstone[mv.id] {
 			continue
 		}
 		dst, err := v.targetGroupForMerge(mv.segs, mv.inBin)
@@ -169,33 +221,35 @@ func (v *Vault) Merge(other *Vault) (MergeResult, error) {
 			if errors.Is(err, ErrNoRecycleBin) {
 				continue
 			}
-			return res, err
+			return plan.res, err
 		}
 		e, owner, _, _, err := v.findEntry(mv.id)
 		if err != nil {
 			continue
 		}
 		if err := v.move(e, owner, dst); err != nil {
-			return res, err
+			return plan.res, err
 		}
 	}
 
-	for _, in := range news {
+	var added int
+	for _, in := range plan.news {
 		g, err := v.targetGroupForMerge(in.segs, in.inBin)
 		if err != nil {
 			if errors.Is(err, ErrNoRecycleBin) {
 				continue
 			}
-			return res, err
+			return plan.res, err
 		}
 		g.Entries = append(g.Entries, in.entry)
-		res.Added++
+		added++
 	}
+	plan.res.Added = added
 
-	if res.Added+res.Updated+res.Deleted > 0 {
+	if plan.res.Added+plan.res.Updated+plan.res.Deleted > 0 {
 		v.dirty = true
 	}
-	return res, nil
+	return plan.res, nil
 }
 
 func locTime(e *gokeepasslib.Entry) time.Time {

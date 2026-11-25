@@ -89,6 +89,7 @@ export function App() {
   // in create mode when the path came from the save dialog: that file does
   // not exist yet, so it can be created but not unlocked.
   const [pending, setPending] = useState({ path: '', create: false })
+  const [diskChanged, setDiskChanged] = useState(false)
   const [error, setError] = useState('')
 
   const detail = loadedDetail?.id === selectedId ? loadedDetail : null
@@ -107,7 +108,30 @@ export function App() {
     () => on(EVENT_CLOSE_REQUESTED, () => setOverlay({ kind: 'unsaved', intent: { kind: 'quit' } })),
     [],
   )
-  useEffect(() => on(EVENT_CONFLICT, () => setOverlay({ kind: 'conflict' })), [])
+  useEffect(
+    () =>
+      on(EVENT_CONFLICT, () => {
+        setDiskChanged(true)
+        setOverlay({ kind: 'conflict' })
+      }),
+    [],
+  )
+
+  // Check for external writes (such as Syncthing) when returning to the window,
+  // so the user hears about changes on disk before their next edit hits a conflict.
+  useEffect(() => {
+    if (!status?.unlocked) return
+    function onFocus() {
+      void api
+        .diskState()
+        .then((s) => {
+          if (s.changed && !s.missing) setDiskChanged(true)
+        })
+        .catch(() => {})
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [status?.unlocked])
 
   // leaveFor locks the current vault and points the unlock screen at
   // another one, so opening a second vault does not need a manual lock.
@@ -174,6 +198,7 @@ export function App() {
         setSelection(ALL)
         setOverlay({ kind: 'none' })
         setMenu(null)
+        setDiskChanged(false)
         void refreshSettings()
       }),
     [refreshSettings],
@@ -236,6 +261,7 @@ export function App() {
     try {
       await api.save()
       setError('')
+      setDiskChanged(false)
       setStatus(await api.status())
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -646,7 +672,7 @@ export function App() {
         <span className="font-mono">KDBX {status.formatVersion}</span>
         {/* Writes save themselves, so "unsaved changes" only appears when
             an autosave was refused and the conflict is still unresolved. */}
-        {status.dirty && (
+        {status.dirty ? (
           <>
             <span className="text-line-strong">·</span>
             <button
@@ -657,6 +683,19 @@ export function App() {
               not saved, resolve the conflict
             </button>
           </>
+        ) : (
+          diskChanged && (
+            <>
+              <span className="text-line-strong">·</span>
+              <button
+                type="button"
+                onClick={() => setOverlay({ kind: 'conflict' })}
+                className="text-warn hover:underline"
+              >
+                changed on disk, reload or merge
+              </button>
+            </>
+          )
         )}
         {error && (
           <>
@@ -878,7 +917,10 @@ export function App() {
       {overlay.kind === 'conflict' && (
         <ConflictDialog
           onClose={() => setOverlay({ kind: 'none' })}
-          onResolved={() => void refreshAfterWrite()}
+          onResolved={() => {
+            setDiskChanged(false)
+            void refreshAfterWrite()
+          }}
         />
       )}
     </div>

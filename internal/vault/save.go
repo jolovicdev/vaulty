@@ -234,6 +234,17 @@ func (v *Vault) reopen() (*Vault, error) {
 	return openWith(path, dbc)
 }
 
+// PreviewMergeFromDisk reports what MergeFromDisk would add, update and delete
+// without mutating the open vault.
+func (v *Vault) PreviewMergeFromDisk() (MergeResult, error) {
+	disk, err := v.reopen()
+	if err != nil {
+		return MergeResult{}, err
+	}
+	defer disk.Close()
+	return v.PreviewMerge(disk)
+}
+
 // MergeFromDisk resolves a changed-on-disk conflict by folding the file's
 // current contents into this session and adopting its fingerprint, which is
 // what allows the Save that follows to proceed.

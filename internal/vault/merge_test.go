@@ -544,3 +544,34 @@ func TestMergeRelocatesMovedEntryWhenNewer(t *testing.T) {
 		t.Error("Bank was not moved into the recycle bin by merge")
 	}
 }
+
+func TestPreviewMergeMatchesActualMergeWithoutMutating(t *testing.T) {
+	ours, theirs := twoCopies(t)
+	if _, err := theirs.Add(Draft{Title: "Preview New", Password: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	id := idOf(t, ours, "GitHub")
+	if err := theirs.Update(id, Draft{Title: "GitHub", Password: "newer"}); err != nil {
+		t.Fatal(err)
+	}
+	setModTime(t, theirs, id, time.Now().Add(time.Hour))
+
+	preview, err := ours.PreviewMerge(theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ours.Dirty() {
+		t.Error("PreviewMerge marked vault dirty")
+	}
+	if preview.Added != 1 || preview.Updated != 1 {
+		t.Fatalf("preview = %+v, want Added=1 Updated=1", preview)
+	}
+
+	actual, err := ours.Merge(theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual != preview {
+		t.Errorf("Merge = %+v, want preview %+v", actual, preview)
+	}
+}

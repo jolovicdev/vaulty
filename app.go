@@ -632,12 +632,25 @@ func (a *App) saving(change func(v *vault.Vault) error) error {
 	return a.autosave()
 }
 
-// DiskState reports whether another writer has touched the file.
+// DiskState reports whether another writer has touched the file without
+// resetting the idle timer, so focus checks cannot keep an idle vault open.
 func (a *App) DiskState() (vault.DiskState, error) {
 	var out vault.DiskState
-	err := a.withVault(func(v *vault.Vault) error {
+	err := a.withVaultQuiet(func(v *vault.Vault) error {
 		var err error
 		out, err = v.CheckDisk()
+		return err
+	})
+	return out, err
+}
+
+// PreviewMerge reports how many entries MergeFromDisk would add, update and
+// delete without modifying the open vault.
+func (a *App) PreviewMerge() (vault.MergeResult, error) {
+	var out vault.MergeResult
+	err := a.withVault(func(v *vault.Vault) error {
+		var err error
+		out, err = v.PreviewMergeFromDisk()
 		return err
 	})
 	return out, err
