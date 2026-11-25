@@ -315,7 +315,7 @@ export function EntryEditor({
             <Input value={tags} onChange={(e) => setTags(e.target.value)} />
           </Field>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex h-[var(--control-h)] items-center justify-between gap-3">
             <Toggle
               label="Expires on a date"
               checked={expires}
@@ -325,14 +325,15 @@ export function EntryEditor({
               }}
             />
             {expires && (
-              <Input
-                mono
-                type="date"
-                aria-label="Expiry date"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-                className="w-[180px]"
-              />
+              <div className="w-[164px] shrink-0">
+                <Input
+                  mono
+                  type="date"
+                  aria-label="Expiry date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                />
+              </div>
             )}
           </div>
 
