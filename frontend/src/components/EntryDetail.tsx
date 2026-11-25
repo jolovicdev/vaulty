@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { FIELD, type Detail } from '../lib/types'
-import { SHORTCUTS } from '../lib/shortcuts'
+import { SHORTCUTS, isTypingTarget } from '../lib/shortcuts'
 import { Button, Dots, Empty, IconButton, Secret, Tooltip } from './primitives'
 import { CopyButton } from './CopyButton'
 import { anchorFromButton, anchorFromEvent, type MenuAnchor } from './Menu'
@@ -34,17 +34,23 @@ function formatDate(iso: string): string {
 
 export function EntryDetail({
   detail,
+  detailRev = 0,
+  shortcutsEnabled = true,
   onEdit,
   onDelete,
   onRestore,
   onHistory,
+  onOpenUrl,
   onMenu,
 }: {
   detail: Detail | null
+  detailRev?: number
+  shortcutsEnabled?: boolean
   onEdit: () => void
   onDelete: () => void
   onRestore: () => void
   onHistory: () => void
+  onOpenUrl: (id: string) => void
   onMenu: (detail: Detail, anchor: MenuAnchor) => void
 }) {
   const [held, setHeld] = useState<Revealed | null>(null)
@@ -67,15 +73,16 @@ export function EntryDetail({
   )
 
   useEffect(() => {
+    if (!shortcutsEnabled) return
     function onKey(e: KeyboardEvent) {
-      if (SHORTCUTS.reveal.match(e)) {
+      if (SHORTCUTS.reveal.match(e) && !isTypingTarget(e.target)) {
         e.preventDefault()
         void toggle(FIELD.password)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [toggle])
+  }, [toggle, shortcutsEnabled])
 
   if (!detail) {
     return (
@@ -216,7 +223,7 @@ export function EntryDetail({
 
           {detail.hasTotp && (
             <Row label="One-time code">
-              <Totp entryId={detail.id} />
+              <Totp entryId={detail.id} refreshKey={detailRev} />
             </Row>
           )}
         </Group>
@@ -229,7 +236,7 @@ export function EntryDetail({
                 <IconButton
                   label={SHORTCUTS.openUrl.label}
                   keys={SHORTCUTS.openUrl.keys}
-                  onClick={() => void api.openUrl(detail.id)}
+                  onClick={() => onOpenUrl(detail.id)}
                 >
                   <ExternalLink size={13} />
                 </IconButton>

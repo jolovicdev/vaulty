@@ -38,6 +38,11 @@ export function EntryEditor({
   onSaved: (id: string) => void
 }) {
   const editing = detail !== null
+  const groupOptions = flatten(groups)
+  const initialGroup = detail?.groupId ?? defaultGroupId
+  const validInitialGroup = groupOptions.some((g) => g.id === initialGroup)
+    ? initialGroup
+    : (groupOptions[0]?.id ?? '')
   const [title, setTitle] = useState(detail?.title ?? '')
   const [username, setUsername] = useState(detail?.username ?? '')
   const [password, setPassword] = useState('')
@@ -46,32 +51,47 @@ export function EntryEditor({
   const [tags, setTags] = useState((detail?.tags ?? []).join(', '))
   const [totpSeed, setTotpSeed] = useState('')
   const [removeTotp, setRemoveTotp] = useState(false)
-  const [groupId, setGroupId] = useState(detail?.groupId ?? defaultGroupId)
+  const [groupId, setGroupId] = useState(validInitialGroup)
   const [custom, setCustom] = useState<CustomRow[]>([])
   const [strength, setStrength] = useState<StrengthResult | null>(null)
   const [showGenerator, setShowGenerator] = useState(false)
   const [revealPassword, setRevealPassword] = useState(!editing)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(!editing)
+  const [saving, setSaving] = useState(false)
 
   // Editing pulls the existing secrets in, because an edit that silently
   // blanked the password would be worse than asking for it again.
+  // A failed load leaves saving disabled, since saving would blank the
+  // fields that did not arrive.
   useEffect(() => {
     if (!detail) return
+    let live = true
     void (async () => {
-      const rows: CustomRow[] = []
-      for (const f of detail.custom) {
-        rows.push({
-          key: f.key,
-          value: f.protected ? await api.reveal(detail.id, f.key) : f.value,
-          protected: f.protected,
-        })
+      try {
+        const [rows, pw, notesValue] = await Promise.all([
+          Promise.all(
+            detail.custom.map(async (f) => ({
+              key: f.key,
+              value: f.protected ? await api.reveal(detail.id, f.key) : f.value,
+              protected: f.protected,
+            })),
+          ),
+          detail.passwordSet ? api.reveal(detail.id, FIELD.password) : '',
+          detail.hasNotes ? api.reveal(detail.id, FIELD.notes) : '',
+        ])
+        if (!live) return
+        setCustom(rows)
+        setPassword(pw)
+        setNotes(notesValue)
+        setLoaded(true)
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : String(e))
       }
-      setCustom(rows)
-      if (detail.passwordSet) setPassword(await api.reveal(detail.id, FIELD.password))
-      if (detail.hasNotes) setNotes(await api.reveal(detail.id, FIELD.notes))
-      setLoaded(true)
     })()
+    return () => {
+      live = false
+    }
   }, [detail])
 
   useEffect(() => {
@@ -90,6 +110,8 @@ export function EntryEditor({
   }, [password, showStrength])
 
   async function submit() {
+    if (!loaded || saving) return
+    setSaving(true)
     const draft: Draft = {
       title: title.trim(),
       username: username.trim(),
@@ -115,10 +137,9 @@ export function EntryEditor({
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      setSaving(false)
     }
   }
-
-  const groupOptions = flatten(groups)
 
   return (
     <Dialog
@@ -128,7 +149,7 @@ export function EntryEditor({
       footer={
         showGenerator ? undefined : (
           <div className="flex items-center gap-2">
-            <Button variant="primary" disabled={!loaded} onClick={() => void submit()}>
+            <Button variant="primary" disabled={!loaded || saving} onClick={() => void submit()}>
               {editing ? 'Save changes' : 'Create entry'}
             </Button>
             <Button variant="quiet" onClick={onClose}>

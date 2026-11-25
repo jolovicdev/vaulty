@@ -73,8 +73,11 @@ export function Palette({
   const [query, setQuery] = useState('')
   const [entries, setEntries] = useState<Meta[]>([])
   const [cursor, setCursor] = useState(0)
-  const [done, setDone] = useState('')
+  const [done, setDone] = useState<{ text: string; error?: boolean } | null>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => () => clearTimeout(closeTimer.current), [])
 
   useEffect(() => {
     let live = true
@@ -116,8 +119,8 @@ export function Palette({
       ?.scrollIntoView({ block: 'nearest' })
   }, [cursor])
 
-  async function act(kind: 'password' | 'username' | 'totp' | 'url' | 'open') {
-    const row = rows[cursor]
+  async function act(kind: 'password' | 'username' | 'totp' | 'url' | 'open', index = cursor) {
+    const row = rows[index]
     if (!row) return
     if (row.kind === 'command') {
       // The palette and the screens a command opens share one overlay slot,
@@ -129,38 +132,39 @@ export function Palette({
     }
     const id = row.entry.id
     try {
+      clearTimeout(closeTimer.current)
       switch (kind) {
         case 'password':
           await api.copyField(id, FIELD.password)
-          setDone('Password copied')
+          setDone({ text: 'Password copied' })
           break
         case 'username':
           await api.copyField(id, FIELD.username)
-          setDone('Username copied')
+          setDone({ text: 'Username copied' })
           break
         case 'totp':
           await api.copyTotp(id)
-          setDone('One-time code copied')
+          setDone({ text: 'One-time code copied' })
           break
         case 'url':
           await api.openUrl(id)
-          setDone('Opened in the browser')
+          setDone({ text: 'Opened in the browser' })
           break
         case 'open':
           onSelectEntry(id)
           onClose()
           return
       }
-      setTimeout(onClose, 550)
+      closeTimer.current = setTimeout(onClose, 550)
     } catch (e) {
-      setDone(e instanceof Error ? e.message : String(e))
+      setDone({ text: e instanceof Error ? e.message : String(e), error: true })
     }
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setCursor((c) => Math.min(c + 1, rows.length - 1))
+      setCursor((c) => (rows.length === 0 ? 0 : Math.min(c + 1, rows.length - 1)))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setCursor((c) => Math.max(c - 1, 0))
@@ -212,7 +216,7 @@ export function Palette({
                   role="option"
                   aria-selected={active}
                   onMouseMove={() => setCursor(i)}
-                  onClick={() => void act('password')}
+                  onClick={() => void act('password', i)}
                   className={`relative flex h-[var(--row-h)] w-full items-center gap-[10px] px-3 text-left ${
                     active ? 'bg-selected' : ''
                   } ${
@@ -254,7 +258,7 @@ export function Palette({
 
         <div className="flex h-[30px] shrink-0 items-center gap-4 border-t border-line px-3 text-sm text-text-3">
           {done ? (
-            <span className="text-ok">{done}</span>
+            <span className={done.error ? 'truncate text-err' : 'text-ok'}>{done.text}</span>
           ) : (
             <>
               <Hint keys="Enter" label="copy password" />

@@ -30,37 +30,40 @@ function Ring({ fraction }: { fraction: number }) {
   )
 }
 
-export function Totp({ entryId }: { entryId: string }) {
+export function Totp({ entryId, refreshKey = 0 }: { entryId: string; refreshKey?: number }) {
   const [code, setCode] = useState<TotpCode | null>(null)
   const [remaining, setRemaining] = useState(0)
 
   useEffect(() => {
     let live = true
+    let deadline = 0
+    let rollTimer: ReturnType<typeof setTimeout> | undefined
+
     async function refresh() {
       try {
         const next = await api.totp(entryId)
         if (!live) return
         setCode(next)
-        setRemaining(next.remaining)
+        const ms = next.remainingMs ?? next.remaining * 1000
+        deadline = Date.now() + ms
+        setRemaining(Math.max(1, Math.ceil(ms / 1000)))
+        clearTimeout(rollTimer)
+        rollTimer = setTimeout(() => void refresh(), Math.max(50, ms + 25))
       } catch {
         if (live) setCode(null)
       }
     }
     void refresh()
     const id = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          void refresh()
-          return 0
-        }
-        return r - 1
-      })
-    }, 1000)
+      if (!deadline) return
+      setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
+    }, 250)
     return () => {
       live = false
       clearInterval(id)
+      clearTimeout(rollTimer)
     }
-  }, [entryId])
+  }, [entryId, refreshKey])
 
   if (!code) return null
 

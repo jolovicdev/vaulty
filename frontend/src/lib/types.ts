@@ -107,6 +107,7 @@ export interface TotpCode {
   digits: number
   period: number
   remaining: number
+  remainingMs?: number
   issuer: string
   account: string
 }

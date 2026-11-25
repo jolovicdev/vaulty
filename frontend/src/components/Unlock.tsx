@@ -134,6 +134,12 @@ export function Unlock({
 
   async function forget(r: Recent) {
     await api.forgetRecent(r.path)
+    if (r.path === path) {
+      const next = recents.find((item) => item.path !== r.path)
+      setPath(next?.path ?? '')
+      setKeyFile(next?.keyFile ?? '')
+      setShowKeyFile(Boolean(next?.keyFile))
+    }
     onSettingsChanged()
   }
 

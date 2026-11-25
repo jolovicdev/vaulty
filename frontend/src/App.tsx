@@ -63,6 +63,9 @@ export function App() {
   const [selection, setSelection] = useState<Selection>(ALL)
   const [selectedId, setSelectedId] = useState('')
   const [loadedDetail, setLoadedDetail] = useState<Detail | null>(null)
+  // Incremented after any write or conflict resolution so EntryDetail and
+  // Totp refetch even when selectedId did not change.
+  const [detailRev, setDetailRev] = useState(0)
   const [query, setQuery] = useState('')
   const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' })
   const [menu, setMenu] = useState<{ entries: MenuEntry[]; anchor: MenuAnchor } | null>(null)
@@ -73,7 +76,7 @@ export function App() {
   const [error, setError] = useState('')
 
   const detail = loadedDetail?.id === selectedId ? loadedDetail : null
-  const vaultIsEmpty = total === 0
+  const vaultIsEmpty = total === 0 && !selection.recycleBin
 
   const listOptions = {
     groupId: selection.recycleBin ? selection.groupId : selection.groupId,
@@ -168,11 +171,16 @@ export function App() {
     setTotal(all.length)
   }, [status?.unlocked])
 
+  // Each keystroke starts a search, and replies can arrive out of order. Only
+  // the latest request may set the list.
+  const listRequest = useRef(0)
   const refreshList = useCallback(async () => {
     if (!status?.unlocked) return
+    const request = ++listRequest.current
     const found = query.trim()
       ? await api.search(query, listOptions)
       : await api.list(listOptions)
+    if (request !== listRequest.current) return
     setEntries(found)
     setSelectedId((current) =>
       found.some((e) => e.id === current) ? current : (found[0]?.id ?? ''),
@@ -204,7 +212,7 @@ export function App() {
     return () => {
       live = false
     }
-  }, [selectedId])
+  }, [selectedId, detailRev])
 
   // Writes save themselves. This remains for Ctrl S, which is what a hand
   // reaches for after resolving a conflict, and for the unsaved dialog.
@@ -222,10 +230,17 @@ export function App() {
     }
   }, [])
 
+  // The backend refuses some addresses, such as file URLs, and the refusal
+  // has to reach the footer rather than end as an unhandled rejection.
+  const openUrl = useCallback((id: string) => {
+    api.openUrl(id).catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }, [])
+
   const refreshAfterWrite = useCallback(
     async (id?: string) => {
       await Promise.all([refreshTree(), refreshList()])
       if (id) setSelectedId(id)
+      setDetailRev((r) => r + 1)
       setStatus(await api.status())
     },
     [refreshTree, refreshList],
@@ -336,7 +351,11 @@ export function App() {
       } else if (SHORTCUTS.history.match(e)) {
         e.preventDefault()
         setOverlay({ kind: 'history', id: detail.id })
-      } else if (SHORTCUTS.copyPassword.match(e) && !isTypingTarget(e.target)) {
+      } else if (
+        SHORTCUTS.copyPassword.match(e) &&
+        !isTypingTarget(e.target) &&
+        !window.getSelection()?.toString()
+      ) {
         e.preventDefault()
         void api.copyField(detail.id, 'Password')
       } else if (SHORTCUTS.copyUsername.match(e)) {
@@ -347,8 +366,8 @@ export function App() {
         void api.copyTotp(detail.id)
       } else if (SHORTCUTS.openUrl.match(e)) {
         e.preventDefault()
-        void api.openUrl(detail.id)
-      } else if (SHORTCUTS.del.match(e)) {
+        openUrl(detail.id)
+      } else if (SHORTCUTS.del.match(e) && !isTypingTarget(e.target)) {
         e.preventDefault()
         void deleteEntry(detail)
       } else if (!isTypingTarget(e.target) && (SHORTCUTS.down.match(e) || SHORTCUTS.up.match(e))) {
@@ -360,7 +379,17 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [status?.unlocked, overlayKind, detail, entries, selectedId, save, deleteEntry, browseVault])
+  }, [
+    status?.unlocked,
+    overlayKind,
+    detail,
+    entries,
+    selectedId,
+    save,
+    openUrl,
+    deleteEntry,
+    browseVault,
+  ])
 
   // The handler sets every menu reads from. Defined once so a row menu, the
   // hover button and the palette cannot offer different behaviour for the
@@ -369,18 +398,18 @@ export function App() {
     copyPassword: (id: string) => void api.copyField(id, 'Password'),
     copyUsername: (id: string) => void api.copyField(id, 'UserName'),
     copyTotp: (id: string) => void api.copyTotp(id),
-    openUrl: (id: string) => void api.openUrl(id),
+    openUrl,
     edit: (id: string) => {
       if (detail?.id === id) setOverlay({ kind: 'editor', detail })
       else void api.detail(id).then((d) => setOverlay({ kind: 'editor', detail: d }))
     },
     move: (id: string) => {
-      const target = entries.find((e) => e.id === id)
+      const target = entries.find((e) => e.id === id) ?? (detail?.id === id ? detail : undefined)
       if (target) setOverlay({ kind: 'move', detail: target })
     },
     history: (id: string) => setOverlay({ kind: 'history', id }),
     del: (id: string) => {
-      const target = entries.find((e) => e.id === id)
+      const target = entries.find((e) => e.id === id) ?? (detail?.id === id ? detail : undefined)
       if (target) void deleteEntry(target)
     },
     restore: (id: string) => void api.restoreEntry(id, '').then(() => refreshAfterWrite()),
@@ -449,6 +478,7 @@ export function App() {
         onUnlocked={(s) => {
           setPending({ path: '', create: false })
           setStatus(s)
+          void refreshSettings()
         }}
         onSettingsChanged={() => void refreshSettings()}
       />
@@ -493,8 +523,11 @@ export function App() {
             />
             <EntryDetail
               detail={detail}
+              detailRev={detailRev}
+              shortcutsEnabled={overlay.kind === 'none'}
               onEdit={() => detail && setOverlay({ kind: 'editor', detail })}
               onHistory={() => detail && setOverlay({ kind: 'history', id: detail.id })}
+              onOpenUrl={openUrl}
               onDelete={() => detail && void deleteEntry(detail)}
               onRestore={() =>
                 detail && void api.restoreEntry(detail.id, '').then(() => refreshAfterWrite())
@@ -610,7 +643,7 @@ export function App() {
         <EntryEditor
           detail={overlay.detail}
           groups={groups}
-          defaultGroupId={selection.groupId || groups[0]?.id || ''}
+          defaultGroupId={(!selection.recycleBin && selection.groupId) || groups[0]?.id || ''}
           showStrength={settings.showPasswordStrength}
           onClose={() => setOverlay({ kind: 'none' })}
           onSaved={(id) => {
