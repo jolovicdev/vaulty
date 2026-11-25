@@ -32,6 +32,7 @@ export type Command =
   | 'openVault'
   | 'createVault'
   | 'importFile'
+  | 'changeCredentials'
 
 interface CommandRow {
   id: Command
@@ -51,6 +52,7 @@ const COMMANDS: CommandRow[] = [
   },
   { id: 'createVault', label: 'Create a vault', keys: '', icon: <Database size={14} /> },
   { id: 'importFile', label: IMPORT_LABEL, keys: '', icon: <Import size={14} /> },
+  { id: 'changeCredentials', label: 'Change master password', keys: '', icon: <KeyRound size={14} /> },
   { id: 'generator', label: SHORTCUTS.generator.label, keys: SHORTCUTS.generator.keys, icon: <Wand2 size={14} /> },
   { id: 'save', label: SHORTCUTS.save.label, keys: SHORTCUTS.save.keys, icon: <Check size={14} /> },
   { id: 'settings', label: SHORTCUTS.settings.label, keys: SHORTCUTS.settings.keys, icon: <SettingsIcon size={14} /> },

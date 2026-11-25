@@ -34,6 +34,7 @@ var (
 	ErrNoRecycleBin  = errors.New("recycle bin is disabled for this database")
 	ErrDiskChanged   = errors.New("vault file changed on disk since it was opened")
 	ErrReadOnlyField = errors.New("field cannot be written directly")
+	ErrArgon2id      = errors.New("this vault uses Argon2id, which Vaulty cannot open yet; switch its KDF to Argon2d in KeePassXC under Database Settings, Encryption")
 )
 
 // Meta is the entry projection the UI list is allowed to hold. It carries no

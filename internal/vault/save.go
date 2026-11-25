@@ -50,6 +50,10 @@ func (v *Vault) checkDiskLocked() (DiskState, error) {
 func (v *Vault) Save() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	return v.saveLocked()
+}
+
+func (v *Vault) saveLocked() error {
 	if err := v.checkOpen(); err != nil {
 		return err
 	}

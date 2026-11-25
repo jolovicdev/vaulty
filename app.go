@@ -316,6 +316,23 @@ func (a *App) remember(path, keyFile string) {
 	a.mu.Unlock()
 }
 
+// ChangeCredentials replaces the open vault's master password and/or key file,
+// saves immediately, and updates the remembered key file path in settings.
+func (a *App) ChangeCredentials(password, keyFile string) error {
+	var vaultPath string
+	if err := a.withVault(func(v *vault.Vault) error {
+		if err := v.ChangeCredentials(vault.Credentials{Password: password, KeyFile: keyFile}); err != nil {
+			return err
+		}
+		vaultPath = v.Path()
+		return nil
+	}); err != nil {
+		return err
+	}
+	a.remember(vaultPath, keyFile)
+	return nil
+}
+
 // ForgetRecent drops a vault from the recent list.
 func (a *App) ForgetRecent(path string) error {
 	if a.store == nil {

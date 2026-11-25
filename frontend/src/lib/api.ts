@@ -65,6 +65,8 @@ export const api = {
     call<Status>('Unlock', path, password, keyFile),
   createVault: (path: string, password: string, keyFile: string) =>
     call<Status>('CreateVault', path, password, keyFile),
+  changeCredentials: (password: string, keyFile: string) =>
+    call<void>('ChangeCredentials', password, keyFile),
   lock: () => call<void>('Lock'),
   touch: () => call<void>('Touch'),
 

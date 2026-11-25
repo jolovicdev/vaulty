@@ -18,11 +18,13 @@ export function SettingsPanel({
   status,
   onClose,
   onSaved,
+  onChangeCredentials,
 }: {
   settings: SettingsData
   status: Status
   onClose: () => void
   onSaved: (s: SettingsData) => void
+  onChangeCredentials: () => void
 }) {
   const [draft, setDraft] = useState(settings)
   const [path, setPath] = useState('')
@@ -128,11 +130,18 @@ export function SettingsPanel({
           {/* The vault's path and format are in the status bar at the same
               time, so only what is not visible there is repeated here. */}
           {status.unlocked && (
-            <span className="flex gap-2">
-              <span className="w-[92px] shrink-0">Backups</span>
-              <span className="font-mono tabular">{backups.length}</span>
-              <span>kept beside the vault</span>
-            </span>
+            <>
+              <span className="flex gap-2">
+                <span className="w-[92px] shrink-0">Backups</span>
+                <span className="font-mono tabular">{backups.length}</span>
+                <span>kept beside the vault</span>
+              </span>
+              <div className="pt-3">
+                <Button variant="default" onClick={onChangeCredentials}>
+                  Change master password or key file
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </div>

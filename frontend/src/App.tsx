@@ -28,6 +28,7 @@ import { Dialog, IconButton, Tooltip } from './components/primitives'
 import { Menu, anchorFromButton, type MenuAnchor, type MenuEntry } from './components/Menu'
 import { MoveDialog } from './components/MoveDialog'
 import { ImportDialog } from './components/ImportDialog'
+import { CredentialsDialog } from './components/CredentialsDialog'
 import { appMenu, entryMenu, groupMenu } from './lib/actions'
 
 type Overlay =
@@ -44,6 +45,7 @@ type Overlay =
   | { kind: 'moveGroup'; group: GroupNode }
   | { kind: 'move'; detail: Meta }
   | { kind: 'import'; path: string }
+  | { kind: 'credentials' }
   | { kind: 'unsaved'; intent: UnsavedIntent }
 
 /** Applies the theme choice. The dark values are the document default, so
@@ -528,6 +530,9 @@ export function App() {
         setOverlay({ kind: 'none' })
         void importFile()
         return
+      case 'changeCredentials':
+        setOverlay({ kind: 'credentials' })
+        return
     }
   }
 
@@ -734,6 +739,18 @@ export function App() {
           onSaved={(s) => {
             setSettings(s)
             applyTheme(s.theme)
+          }}
+          onChangeCredentials={() => setOverlay({ kind: 'credentials' })}
+        />
+      )}
+      {overlay.kind === 'credentials' && (
+        <CredentialsDialog
+          currentKeyFile={settings.recent.find((r) => r.path === status.path)?.keyFile ?? ''}
+          showStrength={settings.showPasswordStrength}
+          onClose={() => setOverlay({ kind: 'none' })}
+          onChanged={() => {
+            void refreshSettings()
+            void api.status().then(setStatus)
           }}
         />
       )}
