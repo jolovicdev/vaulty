@@ -124,6 +124,14 @@ export function EntryDetail({
             <span className="truncate">{detail.groupPath}</span>
             <Sep />
             <span className="font-mono tabular">{formatDate(detail.modified)}</span>
+            {detail.expires && detail.expiryTime && (
+              <>
+                <Sep />
+                <span className={detail.expired ? 'text-warn' : ''}>
+                  {detail.expired ? 'Expired' : 'Expires'} {formatDate(detail.expiryTime)}
+                </span>
+              </>
+            )}
             {detail.historyCount > 0 && (
               <>
                 <Sep />

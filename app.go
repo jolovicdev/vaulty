@@ -536,6 +536,35 @@ func (a *App) AddGroup(parentID, name string) (string, error) {
 	return id, a.autosave()
 }
 
+// RenameGroup changes a group's name.
+func (a *App) RenameGroup(id, name string) error {
+	return a.saving(func(v *vault.Vault) error { return v.RenameGroup(id, name) })
+}
+
+// DeleteGroup recycles a group, or removes it permanently when it is already
+// in the bin.
+func (a *App) DeleteGroup(id string) error {
+	return a.saving(func(v *vault.Vault) error { return v.DeleteGroup(id) })
+}
+
+// MoveGroup relocates a group under another parent group.
+func (a *App) MoveGroup(id, parentID string) error {
+	return a.saving(func(v *vault.Vault) error { return v.MoveGroup(id, parentID) })
+}
+
+// DuplicateEntry clones an entry in the same group and returns the new id.
+func (a *App) DuplicateEntry(id string) (string, error) {
+	var dupID string
+	if err := a.withVault(func(v *vault.Vault) error {
+		var err error
+		dupID, err = v.Duplicate(id)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	return dupID, a.autosave()
+}
+
 // RestoreVersion copies a past revision back onto the live entry.
 func (a *App) RestoreVersion(id string, index int) error {
 	return a.saving(func(v *vault.Vault) error { return v.RestoreVersion(id, index) })

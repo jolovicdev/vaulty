@@ -97,7 +97,11 @@ export const api = {
   restoreEntry: (id: string, groupId: string) => call<void>('RestoreEntry', id, groupId),
   emptyRecycleBin: () => call<void>('EmptyRecycleBin'),
   moveEntry: (id: string, groupId: string) => call<void>('MoveEntry', id, groupId),
+  duplicateEntry: (id: string) => call<string>('DuplicateEntry', id),
   addGroup: (parentId: string, name: string) => call<string>('AddGroup', parentId, name),
+  renameGroup: (id: string, name: string) => call<void>('RenameGroup', id, name),
+  deleteGroup: (id: string) => call<void>('DeleteGroup', id),
+  moveGroup: (id: string, parentId: string) => call<void>('MoveGroup', id, parentId),
 
   save: () => call<void>('Save'),
   diskState: () => call<DiskState>('DiskState'),

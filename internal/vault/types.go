@@ -39,20 +39,22 @@ var (
 // Meta is the entry projection the UI list is allowed to hold. It carries no
 // secret: no password, no notes, no protected custom field.
 type Meta struct {
-	ID           string    `json:"id"`
-	Title        string    `json:"title"`
-	Username     string    `json:"username"`
-	URL          string    `json:"url"`
-	Tags         []string  `json:"tags"`
-	GroupID      string    `json:"groupId"`
-	GroupPath    string    `json:"groupPath"`
-	Modified     time.Time `json:"modified"`
-	Created      time.Time `json:"created"`
-	HasTOTP      bool      `json:"hasTotp"`
-	HasNotes     bool      `json:"hasNotes"`
-	Expired      bool      `json:"expired"`
-	InRecycleBin bool      `json:"inRecycleBin"`
-	Score        int       `json:"score"`
+	ID           string     `json:"id"`
+	Title        string     `json:"title"`
+	Username     string     `json:"username"`
+	URL          string     `json:"url"`
+	Tags         []string   `json:"tags"`
+	GroupID      string     `json:"groupId"`
+	GroupPath    string     `json:"groupPath"`
+	Modified     time.Time  `json:"modified"`
+	Created      time.Time  `json:"created"`
+	HasTOTP      bool       `json:"hasTotp"`
+	HasNotes     bool       `json:"hasNotes"`
+	Expires      bool       `json:"expires"`
+	ExpiryTime   *time.Time `json:"expiryTime,omitempty"`
+	Expired      bool       `json:"expired"`
+	InRecycleBin bool       `json:"inRecycleBin"`
+	Score        int        `json:"score"`
 }
 
 // CustomField describes a custom string value without disclosing it.
@@ -91,7 +93,9 @@ type Draft struct {
 	GroupID         string   `json:"groupId"`
 	// RemoveTOTP takes the one-time code off the entry on an update. An empty
 	// TOTPSeed cannot ask for that, because it means unchanged.
-	RemoveTOTP bool `json:"removeTotp"`
+	RemoveTOTP bool       `json:"removeTotp"`
+	Expires    bool       `json:"expires"`
+	ExpiryTime *time.Time `json:"expiryTime,omitempty"`
 }
 
 // GroupNode is one node of the group tree.

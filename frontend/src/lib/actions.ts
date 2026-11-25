@@ -4,6 +4,7 @@
 
 import {
   Check,
+  CopyPlus,
   Database,
   Copy,
   ExternalLink,
@@ -39,6 +40,7 @@ export interface EntryHandlers {
   copyTotp: (id: string) => void
   openUrl: (id: string) => void
   edit: (id: string) => void
+  duplicate: (id: string) => void
   move: (id: string) => void
   history: (id: string) => void
   del: (id: string) => void
@@ -112,6 +114,12 @@ export function entryMenu(entry: Meta | Detail, h: EntryHandlers): MenuEntry[] {
     run: () => h.edit(entry.id),
   })
   out.push({
+    id: 'duplicate',
+    label: 'Duplicate entry',
+    icon: icon(CopyPlus),
+    run: () => h.duplicate(entry.id),
+  })
+  out.push({
     id: 'move',
     label: 'Move to a group',
     icon: icon(FolderPlus),
@@ -140,10 +148,13 @@ export function entryMenu(entry: Meta | Detail, h: EntryHandlers): MenuEntry[] {
 export interface GroupHandlers {
   newEntry: (groupId: string) => void
   newGroup: (parentId: string) => void
+  renameGroup: (group: GroupNode) => void
+  moveGroup: (group: GroupNode) => void
+  deleteGroup: (group: GroupNode) => void
   emptyRecycleBin: () => void
 }
 
-export function groupMenu(group: GroupNode, h: GroupHandlers): MenuEntry[] {
+export function groupMenu(group: GroupNode, h: GroupHandlers, isRoot = false): MenuEntry[] {
   if (group.isRecycleBin) {
     return [
       {
@@ -155,7 +166,7 @@ export function groupMenu(group: GroupNode, h: GroupHandlers): MenuEntry[] {
       },
     ]
   }
-  return [
+  const items: MenuEntry[] = [
     {
       id: 'newEntry',
       label: 'New entry here',
@@ -169,7 +180,33 @@ export function groupMenu(group: GroupNode, h: GroupHandlers): MenuEntry[] {
       icon: icon(FolderPlus),
       run: () => h.newGroup(group.id),
     },
+    MENU_SEPARATOR,
+    {
+      id: 'renameGroup',
+      label: 'Rename group',
+      icon: icon(Pencil),
+      run: () => h.renameGroup(group),
+    },
   ]
+  if (!isRoot) {
+    items.push(
+      {
+        id: 'moveGroup',
+        label: 'Move group',
+        icon: icon(FolderOpen),
+        run: () => h.moveGroup(group),
+      },
+      MENU_SEPARATOR,
+      {
+        id: 'deleteGroup',
+        label: 'Delete group',
+        icon: icon(Trash2),
+        danger: true,
+        run: () => h.deleteGroup(group),
+      },
+    )
+  }
+  return items
 }
 
 export interface AppHandlers {

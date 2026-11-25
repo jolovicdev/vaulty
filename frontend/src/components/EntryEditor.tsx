@@ -22,6 +22,19 @@ function flatten(groups: GroupNode[], depth = 0): { id: string; label: string }[
   )
 }
 
+function toDateInput(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
+}
+
+function defaultExpiryDate(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 90)
+  return d.toISOString().slice(0, 10)
+}
+
 export function EntryEditor({
   detail,
   groups,
@@ -51,6 +64,8 @@ export function EntryEditor({
   const [tags, setTags] = useState((detail?.tags ?? []).join(', '))
   const [totpSeed, setTotpSeed] = useState('')
   const [removeTotp, setRemoveTotp] = useState(false)
+  const [expires, setExpires] = useState(Boolean(detail?.expires))
+  const [expiryDate, setExpiryDate] = useState(toDateInput(detail?.expiryTime))
   const [groupId, setGroupId] = useState(validInitialGroup)
   const [custom, setCustom] = useState<CustomRow[]>([])
   const [strength, setStrength] = useState<StrengthResult | null>(null)
@@ -127,6 +142,8 @@ export function EntryEditor({
       protectedCustom: custom.filter((c) => c.protected && c.key.trim()).map((c) => c.key.trim()),
       groupId,
       removeTotp,
+      expires: expires && Boolean(expiryDate),
+      expiryTime: expires && expiryDate ? `${expiryDate}T00:00:00Z` : undefined,
     }
     try {
       if (detail) {
@@ -258,6 +275,27 @@ export function EntryEditor({
           <Field label="Tags" hint="comma separated">
             <Input value={tags} onChange={(e) => setTags(e.target.value)} />
           </Field>
+
+          <div className="flex flex-col gap-2">
+            <Toggle
+              label="Expires on a date"
+              checked={expires}
+              onChange={(checked) => {
+                setExpires(checked)
+                if (checked && !expiryDate) setExpiryDate(defaultExpiryDate())
+              }}
+            />
+            {expires && (
+              <Input
+                mono
+                type="date"
+                aria-label="Expiry date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="w-[180px]"
+              />
+            )}
+          </div>
 
           <Field label="Notes">
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />

@@ -96,8 +96,13 @@ func (v *Vault) meta(e *gokeepasslib.Entry, g *gokeepasslib.Group, path string, 
 		Modified:     modTime(e),
 		HasTOTP:      totpSeed(e) != "",
 		HasNotes:     value(e, FieldNotes) != "",
+		Expires:      e.Times.Expires.Bool,
 		Expired:      expired(e),
 		InRecycleBin: inBin,
+	}
+	if e.Times.ExpiryTime != nil && !e.Times.ExpiryTime.Time.IsZero() {
+		t := e.Times.ExpiryTime.Time
+		m.ExpiryTime = &t
 	}
 	if e.Times.CreationTime != nil {
 		m.Created = e.Times.CreationTime.Time
@@ -270,6 +275,14 @@ func applyDraft(e *gokeepasslib.Entry, d Draft) {
 		e.Values = append(e.Values, protectedValue(k, d.Custom[k], protect[k]))
 	}
 	e.Tags = joinTags(d.Tags)
+	if d.Expires && d.ExpiryTime != nil {
+		e.Times.Expires = w.NewBoolWrapper(true)
+		tw := w.Now()
+		tw.Time = d.ExpiryTime.UTC()
+		e.Times.ExpiryTime = &tw
+	} else {
+		e.Times.Expires = w.NewBoolWrapper(false)
+	}
 }
 
 // isLegacyTOTPField names the pair of custom fields a seed lived in before
@@ -305,6 +318,50 @@ func (v *Vault) Add(d Draft) (string, error) {
 	g.Entries = append(g.Entries, e)
 	v.dirty = true
 	return entryID(&e), nil
+}
+
+// Duplicate clones an existing entry in the same group with a fresh UUID and
+// " (copy)" appended to its title. History is not carried over.
+func (v *Vault) Duplicate(id string) (string, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	e, owner, _, _, err := v.findEntry(id)
+	if err != nil {
+		return "", err
+	}
+
+	dup := snapshot(e)
+	dup.UUID = gokeepasslib.NewUUID()
+	now := w.Now()
+	dup.Times.CreationTime = &now
+	mod := w.Now()
+	dup.Times.LastModificationTime = &mod
+	access := w.Now()
+	dup.Times.LastAccessTime = &access
+	loc := w.Now()
+	dup.Times.LocationChanged = &loc
+
+	title := value(&dup, FieldTitle)
+	if title == "" {
+		title = "Untitled (copy)"
+	} else {
+		title += " (copy)"
+	}
+	replaced := false
+	for i := range dup.Values {
+		if dup.Values[i].Key == FieldTitle {
+			dup.Values[i].Value.Content = title
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		dup.Values = append(dup.Values, protectedValue(FieldTitle, title, false))
+	}
+
+	owner.Entries = append(owner.Entries, dup)
+	v.dirty = true
+	return entryID(&dup), nil
 }
 
 // Update replaces an entry's fields, pushing the previous state onto the

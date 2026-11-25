@@ -40,6 +40,8 @@ type Overlay =
   | { kind: 'shortcuts' }
   | { kind: 'conflict' }
   | { kind: 'newGroup'; parentId: string }
+  | { kind: 'renameGroup'; group: GroupNode }
+  | { kind: 'moveGroup'; group: GroupNode }
   | { kind: 'move'; detail: Meta }
   | { kind: 'import'; path: string }
   | { kind: 'unsaved'; intent: UnsavedIntent }
@@ -51,6 +53,15 @@ function applyTheme(theme: Settings['theme']) {
   const root = document.documentElement
   if (theme === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', theme)
+}
+
+function findParentGroupId(groups: GroupNode[], childId: string, parentId = ''): string {
+  for (const g of groups) {
+    if (g.id === childId) return parentId
+    const found = findParentGroupId(g.children, childId, g.id)
+    if (found) return found
+  }
+  return ''
 }
 
 export function App() {
@@ -254,6 +265,51 @@ export function App() {
     [refreshAfterWrite],
   )
 
+  const renameGroup = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await api.renameGroup(id, name)
+        setError('')
+        await refreshAfterWrite()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [refreshAfterWrite],
+  )
+
+  const moveGroup = useCallback(
+    async (id: string, parentId: string) => {
+      try {
+        await api.moveGroup(id, parentId)
+        setError('')
+        await refreshAfterWrite()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [refreshAfterWrite],
+  )
+
+  const deleteGroup = useCallback(
+    async (group: GroupNode) => {
+      const ok = await api.confirm(
+        'Delete group',
+        `Move "${group.name}" and its entries to the recycle bin?`,
+      )
+      if (!ok) return
+      try {
+        await api.deleteGroup(group.id)
+        setError('')
+        if (selection.groupId === group.id) setSelection(ALL)
+        await refreshAfterWrite()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [refreshAfterWrite, selection.groupId],
+  )
+
   // The two irreversible actions confirm in an OS dialog, not the webview's
   // own confirm box.
   const emptyRecycleBin = useCallback(async () => {
@@ -403,6 +459,11 @@ export function App() {
       if (detail?.id === id) setOverlay({ kind: 'editor', detail })
       else void api.detail(id).then((d) => setOverlay({ kind: 'editor', detail: d }))
     },
+    duplicate: (id: string) =>
+      void api
+        .duplicateEntry(id)
+        .then((dupId) => refreshAfterWrite(dupId))
+        .catch((e) => setError(e instanceof Error ? e.message : String(e))),
     move: (id: string) => {
       const target = entries.find((e) => e.id === id) ?? (detail?.id === id ? detail : undefined)
       if (target) setOverlay({ kind: 'move', detail: target })
@@ -421,6 +482,9 @@ export function App() {
       setOverlay({ kind: 'editor', detail: null })
     },
     newGroup: (parentId: string) => setOverlay({ kind: 'newGroup', parentId }),
+    renameGroup: (group: GroupNode) => setOverlay({ kind: 'renameGroup', group }),
+    moveGroup: (group: GroupNode) => setOverlay({ kind: 'moveGroup', group }),
+    deleteGroup: (group: GroupNode) => void deleteGroup(group),
     emptyRecycleBin: () => void emptyRecycleBin(),
   }
 
@@ -499,7 +563,10 @@ export function App() {
             setQuery('')
           }}
           onGroupMenu={(group, anchor) =>
-            setMenu({ entries: groupMenu(group, groupHandlers), anchor })
+            setMenu({
+              entries: groupMenu(group, groupHandlers, groups.some((r) => r.id === group.id)),
+              anchor,
+            })
           }
         />
         {vaultIsEmpty ? (
@@ -692,6 +759,35 @@ export function App() {
             const parentId = overlay.parentId
             setOverlay({ kind: 'none' })
             void createGroup(parentId, name)
+          }}
+        />
+      )}
+      {overlay.kind === 'renameGroup' && (
+        <NameDialog
+          title="Rename group"
+          label="Group name"
+          confirmLabel="Rename"
+          initial={overlay.group.name}
+          onClose={() => setOverlay({ kind: 'none' })}
+          onSubmit={(name) => {
+            const id = overlay.group.id
+            setOverlay({ kind: 'none' })
+            void renameGroup(id, name)
+          }}
+        />
+      )}
+      {overlay.kind === 'moveGroup' && (
+        <MoveDialog
+          groups={groups}
+          currentGroupId={findParentGroupId(groups, overlay.group.id)}
+          excludeGroupId={overlay.group.id}
+          heading="Move group"
+          title={overlay.group.name}
+          onClose={() => setOverlay({ kind: 'none' })}
+          onMove={(parentId) => {
+            const id = overlay.group.id
+            setOverlay({ kind: 'none' })
+            void moveGroup(id, parentId)
           }}
         />
       )}

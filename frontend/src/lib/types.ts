@@ -14,6 +14,8 @@ export interface Meta {
   created: string
   hasTotp: boolean
   hasNotes: boolean
+  expires: boolean
+  expiryTime?: string
   expired: boolean
   inRecycleBin: boolean
   score: number
@@ -46,6 +48,8 @@ export interface Draft {
   /** Takes the one-time code off the entry. An empty totpSeed cannot ask
    *  for that, because it means unchanged. */
   removeTotp: boolean
+  expires?: boolean
+  expiryTime?: string
 }
 
 export interface GroupNode {
